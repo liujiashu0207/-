@@ -43,19 +43,35 @@ if (-not $hasOrigin) {
 & $gitCmd add .
 
 & $gitCmd diff --cached --quiet
-if ($LASTEXITCODE -eq 0) {
-  Write-Host "[OK] No staged changes. Nothing to sync." -ForegroundColor Yellow
-  exit 0
+$hasStagedChanges = ($LASTEXITCODE -ne 0)
+
+if ($hasStagedChanges) {
+  if ([string]::IsNullOrWhiteSpace($Message)) {
+    $Message = "auto sync: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+  }
+
+  & $gitCmd commit -m $Message
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Commit failed." -ForegroundColor Red
+    exit 1
+  }
+} else {
+  Write-Host "[INFO] No staged changes. Will push existing local commits if ahead." -ForegroundColor Yellow
 }
 
-if ([string]::IsNullOrWhiteSpace($Message)) {
-  $Message = "auto sync: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-}
-
-& $gitCmd commit -m $Message
+& $gitCmd fetch origin main
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "[ERROR] Commit failed." -ForegroundColor Red
+  Write-Host "[ERROR] Fetch failed." -ForegroundColor Red
   exit 1
+}
+
+$counts = & $gitCmd rev-list --left-right --count origin/main...main
+$parts = $counts.Trim().Split(" ")
+$ahead = 0
+if ($parts.Length -ge 2) { $ahead = [int]$parts[1] }
+if ($ahead -le 0) {
+  Write-Host "[OK] Nothing to push. Local is up-to-date." -ForegroundColor Green
+  exit 0
 }
 
 & $gitCmd push origin main
