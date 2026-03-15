@@ -53,7 +53,16 @@ if ([string]::IsNullOrWhiteSpace($Message)) {
 }
 
 & $gitCmd commit -m $Message
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "[ERROR] Commit failed." -ForegroundColor Red
+  exit 1
+}
+
 & $gitCmd push origin main
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "[ERROR] Push failed. Please run this script in your own terminal to complete GitHub authentication." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host "[OK] Synced to GitHub." -ForegroundColor Green
 
