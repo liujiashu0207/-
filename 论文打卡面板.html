@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>论文14天打卡面板</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --sub: #64748b;
+      --primary: #2563eb;
+      --ok: #16a34a;
+      --warn: #f59e0b;
+      --border: #e2e8f0;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #eef2ff 0%, var(--bg) 200px);
+    }
+
+    .container {
+      width: min(1200px, 92vw);
+      margin: 28px auto 40px;
+    }
+
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 14px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(22px, 3vw, 32px);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--sub);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .stat .label {
+      color: var(--sub);
+      font-size: 12px;
+    }
+
+    .stat .value {
+      margin-top: 4px;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .progress-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .progress-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--sub);
+      font-size: 13px;
+    }
+
+    .bar {
+      width: 100%;
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar > div {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #22c55e);
+      transition: width 0.2s ease;
+    }
+
+    .toolbar {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .explain {
+      margin-top: 10px;
+      border: 1px dashed var(--border);
+      background: #f8fbff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.7;
+    }
+
+    .explain b {
+      color: #0f172a;
+    }
+
+    button, select {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      padding: 9px 12px;
+      font-size: 14px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: white;
+      border-color: transparent;
+    }
+
+    button.warn {
+      background: #fff7ed;
+      color: #9a3412;
+      border-color: #fed7aa;
+    }
+
+    .days-grid {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .day-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+    }
+
+    .day-head {
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .day-head .left {
+      display: grid;
+      gap: 4px;
+    }
+
+    .day-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .day-theme {
+      color: var(--sub);
+      font-size: 13px;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      white-space: nowrap;
+      height: fit-content;
+    }
+
+    .day-body {
+      padding: 12px 14px 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .group-title {
+      margin: 0 0 6px;
+      font-size: 13px;
+      color: var(--sub);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .day-meta {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 9px 10px;
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.6;
+    }
+
+    .status-chip {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      height: fit-content;
+      border: 1px solid transparent;
+    }
+
+    .status-done {
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #86efac;
+    }
+
+    .status-progress {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #93c5fd;
+    }
+
+    .status-todo {
+      background: #fff7ed;
+      color: #9a3412;
+      border-color: #fdba74;
+    }
+
+    .task-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .task-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 8px 9px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fbfdff;
+    }
+
+    .task-item.done {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+    }
+
+    .task-item input[type="checkbox"] {
+      margin-top: 2px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--ok);
+    }
+
+    .task-text {
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .muted {
+      color: var(--sub);
+      font-size: 13px;
+    }
+
+    .footer-note {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--sub);
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .stats { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .days-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <h1 class="title">论文14天打卡面板</h1>
+      <p class="subtitle">
+        项目主线：改进A*移动机器人路径规划。<br />
+        使用说明：勾选任务会自动本地保存（浏览器 localStorage），刷新不丢失。<br />
+        新版面板加入了“为什么做、产出物、验收标准、当前状态”，你可以据此审计科研是否在走正路。
+      </p>
+      <div class="explain">
+        <b>怎么看这张面板：</b><br />
+        1）先看每个 Day 的“当前状态”；2）只勾选“有证据文件”的任务；3）每过一关看“质量闸门”是否达标。<br />
+        <b>术语翻译：</b>Baseline=基线对比算法，Ablation=消融实验，FDR=多重比较校正，Evidence=证据文件。
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="label">总任务数</div>
+          <div class="value" id="totalTasks">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">已完成</div>
+          <div class="value" id="doneTasks">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">完成率</div>
+          <div class="value" id="doneRate">0%</div>
+        </div>
+        <div class="stat">
+          <div class="label">已完成天数</div>
+          <div class="value" id="doneDays">0/14</div>
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-head">
+          <span>整体进度</span>
+          <span id="progressText">0%</span>
+        </div>
+        <div class="bar"><div id="progressBar"></div></div>
+      </div>
+
+      <div class="toolbar">
+        <select id="filterMode">
+          <option value="all">显示全部任务</option>
+          <option value="todo">只看未完成任务</option>
+          <option value="done">只看已完成任务</option>
+        </select>
+        <button id="expandAll">展开全部</button>
+        <button id="collapseAll">折叠全部</button>
+        <button id="openAudit">打开科研监督驾驶舱</button>
+        <button class="primary" id="exportData">导出打卡JSON</button>
+        <button class="warn" id="resetAll">清空全部打卡</button>
+      </div>
+    </section>
+
+    <section class="days-grid" id="daysGrid"></section>
+
+    <div class="footer-note">
+      建议：每天先看“为什么做/产出/通过标准”，再勾选任务。只勾有证据文件的项，避免形式化打卡。
+    </div>
+  </div>
+
+  <script>
+    const PLAN_DATA = [
+      { day: 1, theme: "环境与工程初始化", status: "done", goal: "先确保环境可信，后续结果才可复现。", output: "results/environment_report.txt", criteria: "能复现依赖版本与系统信息。", must: ["确认 Python 环境与依赖可用", "建立项目文件夹结构（code/data/figures/docs）", "记录机器与软件版本"], support: ["工程结构建议", "环境检查清单"], gate: [] },
+      { day: 2, theme: "文献检索与快筛", status: "done", goal: "建立文献证据池，避免盲目写作。", output: "results/literature_quick_screen.csv + literature_core8.csv", criteria: "主线文献覆盖改进A*/基线/实验指标。", must: ["初筛15篇近5年文献（机器人路径规划/A*）", "选出8篇高相关文献"], support: ["文献表模板", "相关工作写作框架"], gate: [] },
+      { day: 3, theme: "问题定义与协议冻结", status: "done", goal: "先冻结实验协议，避免后面反复改口径。", output: "docs/day3_实验协议_v1.md", criteria: "地图、指标、轮次、算法分组明确。", must: ["确认地图规模、场景A/B/C、实验轮次"], support: ["实验协议 v1", "创新点表述 v1"], gate: [] },
+      { day: 4, theme: "Baseline跑通（Dijkstra + A*）", status: "done", goal: "建立比较下限，没有基线就没有提升。", output: "results/*_summary.csv（含基线）", criteria: "基线可稳定运行并输出表格。", must: ["跑通基线实验并保存CSV", "输出首版对比表"], support: ["数据记录模板", "参数建议"], gate: ["G1：数据完整性通过", "G2：可复现性通过"] },
+      { day: 5, theme: "实现改进A*（主算法）", status: "done", goal: "把创新点落到代码，不停留在概念。", output: "code/planners/*.py", criteria: "改进算法可独立运行并输出路径指标。", must: ["加入动态加权启发", "加入转向/风险代价", "加入路径平滑模块"], support: ["方法伪代码", "参数默认值"], gate: [] },
+      { day: 6, theme: "Ours实验全量跑", status: "done", goal: "形成主结果证据链。", output: "results/exp_raw_records.csv + exp_summary.csv", criteria: "每场景每算法都有有效结果。", must: ["完成A/B/C场景全量实验", "保存图与日志"], support: ["异常排查清单", "可视化脚本模板"], gate: [] },
+      { day: 7, theme: "消融实验", status: "progress", goal: "验证每个模块到底有没有贡献。", output: "（待补）消融对照表", criteria: "去模块后性能变化可解释。", must: ["运行Ablation-A/B/C", "汇总主指标变化"], support: ["消融表模板", "消融结论写法"], gate: [] },
+      { day: 8, theme: "统计分析与阶段结论", status: "done", goal: "防止拍脑袋结论，所有结论要可检验。", output: "results/exp_significance.csv + exp_multiseed_significance.csv", criteria: "有p值和FDR校正，且支持多种子复验。", must: ["计算均值 ± 标准差", "完成显著性检验（简版）"], support: ["统计脚本建议", "结果解释文本"], gate: ["G1：数据完整性通过", "G3：结论一致性通过"] },
+      { day: 9, theme: "写摘要、引言、相关工作", status: "progress", goal: "用文献证据把研究问题讲清楚。", output: "（进行中）论文前半章节", criteria: "每个论点都能对应文献来源。", must: ["提供最终8篇核心文献"], support: ["摘要初稿", "引言与相关工作初稿"], gate: [] },
+      { day: 10, theme: "写方法与实验章节", status: "progress", goal: "做到文稿-代码-数据一致。", output: "docs/方法章节草稿_v1.md + 实验设计章节草稿_v1.md", criteria: "公式、变量名、实现逻辑一致。", must: ["核对公式、符号、参数一致"], support: ["方法章节初稿", "实验章节初稿"], gate: ["G2：可复现性通过", "G3：结论一致性通过"] },
+      { day: 11, theme: "写结果与讨论", status: "progress", goal: "只写有统计证据支持的结论。", output: "docs/结果与讨论章节草稿_v1.md", criteria: "结论-证据对照表可逐条回查。", must: ["复核图表与结论一致"], support: ["结果与讨论初稿", "局限性与未来工作"], gate: [] },
+      { day: 12, theme: "格式化与投稿包", status: "todo", goal: "把研究成果变成可提交稿。", output: "Cover Letter + 投稿检查单", criteria: "版式、引用、图注、单位全部规范。", must: ["确认作者与单位信息"], support: ["Cover Letter（中文）", "投稿检查单"], gate: ["G4：最小投稿线通过"] },
+      { day: 13, theme: "查重与终稿修正", status: "todo", goal: "降低返修风险。", output: "终稿v2", criteria: "术语统一、图题一致、重复率达标。", must: ["核对术语统一与图题规范"], support: ["语言润色版", "图表说明终版"], gate: [] },
+      { day: 14, theme: "首投提交", status: "todo", goal: "完成首投闭环并准备返修。", output: "投稿回执 + 返修策略", criteria: "提交成功且材料可追溯。", must: ["提交并保存回执"], support: ["返修回复模板", "拒稿后48小时转投方案"], gate: [] }
+    ];
+
+    const STORAGE_KEY = "paper-checkin-v2";
+    const COLLAPSE_KEY = "paper-checkin-collapse-v2";
+    const AUTO_DAY1_FLAG_KEY = "paper-checkin-day1-autofill-v1";
+
+    const state = {
+      checked: JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"),
+      collapsed: JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}"),
+      filter: "all"
+    };
+
+    // 自动补打 Day 1：仅首次执行一次，避免覆盖后续手动调整
+    function autoCheckDay1Once() {
+      const done = localStorage.getItem(AUTO_DAY1_FLAG_KEY);
+      if (done === "1") return;
+
+      const day1TaskIds = [
+        "d1-must-0",
+        "d1-must-1",
+        "d1-must-2",
+        "d1-support-0",
+        "d1-support-1"
+      ];
+
+      day1TaskIds.forEach((id) => {
+        state.checked[id] = true;
+      });
+
+      localStorage.setItem(AUTO_DAY1_FLAG_KEY, "1");
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.checked));
+    }
+
+    const daysGrid = document.getElementById("daysGrid");
+    const filterMode = document.getElementById("filterMode");
+
+    function taskId(day, group, idx) {
+      return `d${day}-${group}-${idx}`;
+    }
+
+    function persist() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.checked));
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state.collapsed));
+    }
+
+    function allTasksFlat() {
+      const tasks = [];
+      PLAN_DATA.forEach((d) => {
+        d.must.forEach((t, i) => tasks.push({ day: d.day, id: taskId(d.day, "must", i), text: t }));
+        d.support.forEach((t, i) => tasks.push({ day: d.day, id: taskId(d.day, "support", i), text: t }));
+        d.gate.forEach((t, i) => tasks.push({ day: d.day, id: taskId(d.day, "gate", i), text: t }));
+      });
+      return tasks;
+    }
+
+    function computeStats() {
+      const tasks = allTasksFlat();
+      const total = tasks.length;
+      const done = tasks.filter(t => state.checked[t.id]).length;
+      const rate = total ? Math.round((done / total) * 100) : 0;
+      let fullDays = 0;
+
+      PLAN_DATA.forEach((d) => {
+        const ids = [];
+        d.must.forEach((_, i) => ids.push(taskId(d.day, "must", i)));
+        d.support.forEach((_, i) => ids.push(taskId(d.day, "support", i)));
+        d.gate.forEach((_, i) => ids.push(taskId(d.day, "gate", i)));
+        if (ids.length > 0 && ids.every(id => state.checked[id])) fullDays += 1;
+      });
+
+      return { total, done, rate, fullDays };
+    }
+
+    function setStats() {
+      const s = computeStats();
+      document.getElementById("totalTasks").textContent = s.total;
+      document.getElementById("doneTasks").textContent = s.done;
+      document.getElementById("doneRate").textContent = `${s.rate}%`;
+      document.getElementById("doneDays").textContent = `${s.fullDays}/14`;
+      document.getElementById("progressText").textContent = `${s.rate}%`;
+      document.getElementById("progressBar").style.width = `${s.rate}%`;
+    }
+
+    function visibleByFilter(id) {
+      if (state.filter === "all") return true;
+      const done = !!state.checked[id];
+      return state.filter === "done" ? done : !done;
+    }
+
+    function renderTaskGroup(day, key, title, list) {
+      const li = list.map((text, idx) => {
+        const id = taskId(day, key, idx);
+        if (!visibleByFilter(id)) return "";
+        const checked = !!state.checked[id];
+        return `
+          <li class="task-item ${checked ? "done" : ""}">
+            <input type="checkbox" data-id="${id}" ${checked ? "checked" : ""} />
+            <div class="task-text">${text}</div>
+          </li>
+        `;
+      }).join("");
+
+      if (!li.trim()) return "";
+      return `
+        <section>
+          <h4 class="group-title">${title}</h4>
+          <ul class="task-list">${li}</ul>
+        </section>
+      `;
+    }
+
+    function render() {
+      daysGrid.innerHTML = "";
+
+      PLAN_DATA.forEach((dayData) => {
+        const container = document.createElement("article");
+        container.className = "day-card";
+        const isCollapsed = !!state.collapsed[dayData.day];
+
+        const allIds = [];
+        dayData.must.forEach((_, i) => allIds.push(taskId(dayData.day, "must", i)));
+        dayData.support.forEach((_, i) => allIds.push(taskId(dayData.day, "support", i)));
+        dayData.gate.forEach((_, i) => allIds.push(taskId(dayData.day, "gate", i)));
+        const doneCount = allIds.filter(id => state.checked[id]).length;
+        const badge = `${doneCount}/${allIds.length} 完成`;
+        const statusMap = {
+          done: { text: "已完成", cls: "status-done" },
+          progress: { text: "进行中", cls: "status-progress" },
+          todo: { text: "未开始", cls: "status-todo" }
+        };
+        const st = statusMap[dayData.status] || statusMap.todo;
+
+        const sections = [
+          renderTaskGroup(dayData.day, "must", "你要做（必做）", dayData.must),
+          renderTaskGroup(dayData.day, "support", "我交付", dayData.support),
+          renderTaskGroup(dayData.day, "gate", "质量闸门", dayData.gate)
+        ].join("");
+
+        container.innerHTML = `
+          <div class="day-head">
+            <div class="left">
+              <div class="day-title">Day ${dayData.day}</div>
+              <div class="day-theme">${dayData.theme}</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span class="status-chip ${st.cls}">${st.text}</span>
+              <span class="badge">${badge}</span>
+              <button data-toggle="${dayData.day}">${isCollapsed ? "展开" : "折叠"}</button>
+            </div>
+          </div>
+          <div class="day-body" style="display:${isCollapsed ? "none" : "grid"};">
+            <div class="day-meta">
+              <div><b>为什么做：</b>${dayData.goal || "—"}</div>
+              <div><b>你要看到的产出：</b>${dayData.output || "—"}</div>
+              <div><b>通过标准：</b>${dayData.criteria || "—"}</div>
+            </div>
+            ${sections || '<div class="muted">当前筛选下无任务显示。</div>'}
+          </div>
+        `;
+
+        daysGrid.appendChild(container);
+      });
+
+      bindEvents();
+      setStats();
+    }
+
+    function bindEvents() {
+      document.querySelectorAll('input[type="checkbox"][data-id]').forEach((cb) => {
+        cb.addEventListener("change", (e) => {
+          const id = e.target.getAttribute("data-id");
+          state.checked[id] = e.target.checked;
+          persist();
+          render();
+        });
+      });
+
+      document.querySelectorAll("button[data-toggle]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const day = btn.getAttribute("data-toggle");
+          state.collapsed[day] = !state.collapsed[day];
+          persist();
+          render();
+        });
+      });
+    }
+
+    filterMode.addEventListener("change", (e) => {
+      state.filter = e.target.value;
+      render();
+    });
+
+    document.getElementById("expandAll").addEventListener("click", () => {
+      PLAN_DATA.forEach(d => { state.collapsed[d.day] = false; });
+      persist();
+      render();
+    });
+
+    document.getElementById("collapseAll").addEventListener("click", () => {
+      PLAN_DATA.forEach(d => { state.collapsed[d.day] = true; });
+      persist();
+      render();
+    });
+
+    document.getElementById("resetAll").addEventListener("click", () => {
+      const ok = confirm("确认清空全部打卡记录吗？此操作不可撤销。");
+      if (!ok) return;
+      state.checked = {};
+      persist();
+      render();
+    });
+
+    document.getElementById("exportData").addEventListener("click", () => {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        checked: state.checked,
+        stats: computeStats()
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "论文打卡数据.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById("openAudit").addEventListener("click", () => {
+      window.open("./科研监督驾驶舱.html", "_blank");
+    });
+
+    autoCheckDay1Once();
+    render();
+  </script>
+</body>
+</html>

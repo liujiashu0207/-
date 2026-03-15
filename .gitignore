@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Large literature files (keep metadata, skip heavy binaries)
+文献/*.pdf
+*.zip
+*.7z
+
+# Temporary logs
+*.log
+
