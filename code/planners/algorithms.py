@@ -1,6 +1,6 @@
-﻿import heapq
+import heapq
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -24,18 +24,40 @@ def _heuristic(a: Point, b: Point, mode: str) -> float:
     return octile_distance(a, b)
 
 
+def _jump_like_neighbors(grid: np.ndarray, node: Point, max_jump: int = 3):
+    # Lightweight JPS-like expansion: try longer strides per direction.
+    x, y = node
+    h, w = grid.shape
+    dirs = (
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1),           (0, 1),
+        (1, -1),  (1, 0),  (1, 1),
+    )
+    for dx, dy in dirs:
+        for step in range(1, max_jump + 1):
+            nx, ny = x + dx * step, y + dy * step
+            if not (0 <= nx < h and 0 <= ny < w):
+                break
+            if grid[nx, ny] == 1:
+                break
+            move_cost = step * (2**0.5 if dx != 0 and dy != 0 else 1.0)
+            yield (nx, ny), move_cost
+
+
 def astar_search(
     grid: np.ndarray,
     start: Point,
     goal: Point,
     heuristic_mode: str = "octile",
     weight: float = 1.0,
+    use_jump_like: bool = False,
 ) -> Dict[str, object]:
     t0 = time.perf_counter()
     open_heap: List[Tuple[float, Point]] = []
     heapq.heappush(open_heap, (0.0, start))
     came_from: Dict[Point, Point] = {}
     g_score: Dict[Point, float] = {start: 0.0}
+    f_score: Dict[Point, float] = {start: weight * _heuristic(start, goal, heuristic_mode)}
     closed = set()
     expanded = 0
 
@@ -56,7 +78,8 @@ def astar_search(
                 "runtime_ms": (time.perf_counter() - t0) * 1000.0,
             }
 
-        for nb, move_cost in neighbors8(grid, current):
+        nbr_iter = _jump_like_neighbors(grid, current) if use_jump_like else neighbors8(grid, current)
+        for nb, move_cost in nbr_iter:
             if nb in closed:
                 continue
             tentative_g = g_score[current] + move_cost
@@ -64,6 +87,7 @@ def astar_search(
                 came_from[nb] = current
                 g_score[nb] = tentative_g
                 f = tentative_g + weight * _heuristic(nb, goal, heuristic_mode)
+                f_score[nb] = f
                 heapq.heappush(open_heap, (f, nb))
 
     return {
@@ -77,15 +101,19 @@ def astar_search(
 
 
 def dijkstra_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
-    return astar_search(grid, start, goal, heuristic_mode="zero", weight=1.0)
+    return astar_search(grid, start, goal, heuristic_mode="zero", weight=1.0, use_jump_like=False)
 
 
 def vanilla_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
-    return astar_search(grid, start, goal, heuristic_mode="octile", weight=1.0)
+    return astar_search(grid, start, goal, heuristic_mode="octile", weight=1.0, use_jump_like=False)
 
 
 def weighted_astar_search(grid: np.ndarray, start: Point, goal: Point, weight: float = 1.2) -> Dict[str, object]:
-    return astar_search(grid, start, goal, heuristic_mode="octile", weight=weight)
+    return astar_search(grid, start, goal, heuristic_mode="octile", weight=weight, use_jump_like=False)
+
+
+def jps_like_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    return astar_search(grid, start, goal, heuristic_mode="octile", weight=1.0, use_jump_like=True)
 
 
 def improved_astar_search_configurable(
@@ -93,23 +121,18 @@ def improved_astar_search_configurable(
     start: Point,
     goal: Point,
     use_adaptive_weight: bool = True,
+    use_jump_like: bool = True,
     use_smoothing: bool = True,
     fixed_weight: float = 1.2,
-    precomputed_alpha: float = None,
 ) -> Dict[str, object]:
-    # precomputed_alpha: 同一地图多次搜索时可传入预计算值，避免重复遍历全图计算障碍率
-    if precomputed_alpha is not None:
-        alpha = precomputed_alpha
-    elif use_adaptive_weight:
-        alpha = adaptive_alpha(obstacle_ratio(grid))
-    else:
-        alpha = fixed_weight
+    alpha = adaptive_alpha(obstacle_ratio(grid)) if use_adaptive_weight else fixed_weight
     res = astar_search(
         grid,
         start,
         goal,
         heuristic_mode="octile",
         weight=alpha,
+        use_jump_like=use_jump_like,
     )
     if not res["success"]:
         return res
@@ -119,27 +142,22 @@ def improved_astar_search_configurable(
 
     p0 = res["path"]
     p1 = simplify_path(p0, grid)
-    p2 = smooth_corners(p1, grid)
+    p2 = smooth_corners(p1)
     res["path"] = p2
     res["path_length"] = path_length(p2)
     res["turn_count"] = turn_count(p2)
     return res
 
 
-def improved_astar_search(
-    grid: np.ndarray,
-    start: Point,
-    goal: Point,
-    precomputed_alpha: float = None,
-) -> Dict[str, object]:
+def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
     return improved_astar_search_configurable(
         grid,
         start,
         goal,
         use_adaptive_weight=True,
+        use_jump_like=True,
         use_smoothing=True,
         fixed_weight=1.2,
-        precomputed_alpha=precomputed_alpha,
     )
 
 
@@ -149,6 +167,19 @@ def ablation_no_adaptive_weight(grid: np.ndarray, start: Point, goal: Point) -> 
         start,
         goal,
         use_adaptive_weight=False,
+        use_jump_like=True,
+        use_smoothing=True,
+        fixed_weight=1.2,
+    )
+
+
+def ablation_no_jump_like(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    return improved_astar_search_configurable(
+        grid,
+        start,
+        goal,
+        use_adaptive_weight=True,
+        use_jump_like=False,
         use_smoothing=True,
         fixed_weight=1.2,
     )
@@ -160,6 +191,7 @@ def ablation_no_smoothing(grid: np.ndarray, start: Point, goal: Point) -> Dict[s
         start,
         goal,
         use_adaptive_weight=True,
+        use_jump_like=True,
         use_smoothing=False,
         fixed_weight=1.2,
     )
