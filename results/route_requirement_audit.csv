@@ -1,0 +1,13 @@
+﻿map,dataset,size,corners_free,trad_success,impr_success,trad_collision_free,impr_collision_free,trad_turns,impr_turns
+arena.map,dao-map,49x49,0,0,0,0,0,,
+arena2.map,dao-map,209x281,0,0,0,0,0,,
+brc000d.map,dao-map,261x257,0,0,0,0,0,,
+Berlin_0_1024.map,street-map,1024x1024,1,1,1,1,1,100.0,10.0
+Berlin_0_256.map,street-map,256x256,1,1,1,1,1,44.0,6.0
+Berlin_0_512.map,street-map,512x512,1,1,1,1,1,54.0,8.0
+battleground.map,wc3-map,512x512,0,0,0,0,0,,
+blastedlands.map,wc3-map,512x512,0,0,0,0,0,,
+bloodvenomfalls.map,wc3-map,512x512,0,0,0,0,0,,
+Map1.map,weighted-map,2048x2048,1,1,1,1,1,6.0,1.0
+Map10.map,weighted-map,2048x2048,1,1,1,1,1,0.0,0.0
+Map11.map,weighted-map,2048x2048,1,1,1,1,1,0.0,0.0

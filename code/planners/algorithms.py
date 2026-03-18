@@ -25,7 +25,7 @@ def _heuristic(a: Point, b: Point, mode: str) -> float:
 
 
 def _jump_like_neighbors(grid: np.ndarray, node: Point, max_jump: int = 3):
-    # Lightweight JPS-like expansion: try longer strides per direction.
+    # Lightweight JPS-like expansion with step-level collision checks.
     x, y = node
     h, w = grid.shape
     dirs = (
@@ -34,14 +34,20 @@ def _jump_like_neighbors(grid: np.ndarray, node: Point, max_jump: int = 3):
         (1, -1),  (1, 0),  (1, 1),
     )
     for dx, dy in dirs:
+        prev_x, prev_y = x, y
         for step in range(1, max_jump + 1):
             nx, ny = x + dx * step, y + dy * step
             if not (0 <= nx < h and 0 <= ny < w):
                 break
             if grid[nx, ny] == 1:
                 break
+            # Disallow diagonal corner-cutting during jump expansion.
+            if dx != 0 and dy != 0:
+                if grid[prev_x + dx, prev_y] == 1 or grid[prev_x, prev_y + dy] == 1:
+                    break
             move_cost = step * (2**0.5 if dx != 0 and dy != 0 else 1.0)
             yield (nx, ny), move_cost
+            prev_x, prev_y = nx, ny
 
 
 def astar_search(
@@ -125,14 +131,17 @@ def improved_astar_search_configurable(
     use_smoothing: bool = True,
     fixed_weight: float = 1.2,
 ) -> Dict[str, object]:
-    alpha = adaptive_alpha(obstacle_ratio(grid)) if use_adaptive_weight else fixed_weight
+    obs_ratio = obstacle_ratio(grid)
+    alpha = adaptive_alpha(obs_ratio) if use_adaptive_weight else fixed_weight
+    # Disable jump-like expansion in dense maps to avoid invalid/inefficient jumps.
+    use_jump_like_effective = use_jump_like and obs_ratio <= 0.45
     res = astar_search(
         grid,
         start,
         goal,
         heuristic_mode="octile",
         weight=alpha,
-        use_jump_like=use_jump_like,
+        use_jump_like=use_jump_like_effective,
     )
     if not res["success"]:
         return res
@@ -142,7 +151,7 @@ def improved_astar_search_configurable(
 
     p0 = res["path"]
     p1 = simplify_path(p0, grid)
-    p2 = smooth_corners(p1)
+    p2 = smooth_corners(p1, grid)
     res["path"] = p2
     res["path_length"] = path_length(p2)
     res["turn_count"] = turn_count(p2)

@@ -39,7 +39,8 @@ def adaptive_alpha(obs_ratio: float) -> float:
     # Keep alpha in a safe numeric range to avoid over-greedy behavior.
     obs_ratio = min(max(obs_ratio, 0.01), 0.99)
     raw = abs(math.log(obs_ratio))
-    return min(max(raw, 0.9), 1.8)
+    # Keep heuristic admissibility behavior safer on dense maps.
+    return min(max(raw, 1.0), 1.8)
 
 
 def reconstruct_path(came_from: dict, current: Point) -> List[Point]:
@@ -111,17 +112,30 @@ def simplify_path(path: List[Point], grid: np.ndarray) -> List[Point]:
     return kept
 
 
-def smooth_corners(path: List[Point]) -> List[Point]:
+def smooth_corners(path: List[Point], grid: np.ndarray) -> List[Point]:
     if len(path) < 3:
         return path[:]
     smoothed: List[Point] = [path[0]]
+    h, w = grid.shape
     for i in range(1, len(path) - 1):
-        ax, ay = path[i - 1]
+        ax, ay = smoothed[-1]
         bx, by = path[i]
         cx, cy = path[i + 1]
         mx = int(round((ax + 2 * bx + cx) / 4.0))
         my = int(round((ay + 2 * by + cy) / 4.0))
-        smoothed.append((mx, my))
+        candidate = (mx, my)
+        in_bounds = 0 <= mx < h and 0 <= my < w
+        if not in_bounds or grid[mx, my] == 1:
+            smoothed.append((bx, by))
+            continue
+        # Only keep smoothed points that preserve obstacle-free visibility.
+        if not line_of_sight(grid, smoothed[-1], candidate):
+            smoothed.append((bx, by))
+            continue
+        if not line_of_sight(grid, candidate, (cx, cy)):
+            smoothed.append((bx, by))
+            continue
+        smoothed.append(candidate)
     smoothed.append(path[-1])
     # Remove duplicates caused by integer rounding.
     deduped = [smoothed[0]]

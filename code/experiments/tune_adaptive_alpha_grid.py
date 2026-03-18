@@ -1,4 +1,4 @@
-﻿import math
+import math
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
@@ -138,7 +138,7 @@ def run_candidate(name: str, alpha_fn: Callable[[float], float], tasks: List[Dic
         if res["success"]:
             p0 = res["path"]
             p1 = simplify_path(p0, t["grid"])
-            p2 = smooth_corners(p1)
+            p2 = smooth_corners(p1, t["grid"])
             plen = float(path_length(p2))
             turns = int(turn_count(p2))
             succ = 1
