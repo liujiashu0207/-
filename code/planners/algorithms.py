@@ -116,18 +116,30 @@ def jps_like_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, ob
     return astar_search(grid, start, goal, heuristic_mode="octile", weight=1.0, use_jump_like=True)
 
 
-def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
-    alpha = adaptive_alpha(obstacle_ratio(grid))
+def improved_astar_search_configurable(
+    grid: np.ndarray,
+    start: Point,
+    goal: Point,
+    use_adaptive_weight: bool = True,
+    use_jump_like: bool = True,
+    use_smoothing: bool = True,
+    fixed_weight: float = 1.2,
+) -> Dict[str, object]:
+    alpha = adaptive_alpha(obstacle_ratio(grid)) if use_adaptive_weight else fixed_weight
     res = astar_search(
         grid,
         start,
         goal,
         heuristic_mode="octile",
         weight=alpha,
-        use_jump_like=True,
+        use_jump_like=use_jump_like,
     )
     if not res["success"]:
         return res
+
+    if not use_smoothing:
+        return res
+
     p0 = res["path"]
     p1 = simplify_path(p0, grid)
     p2 = smooth_corners(p1)
@@ -135,3 +147,51 @@ def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[s
     res["path_length"] = path_length(p2)
     res["turn_count"] = turn_count(p2)
     return res
+
+
+def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    return improved_astar_search_configurable(
+        grid,
+        start,
+        goal,
+        use_adaptive_weight=True,
+        use_jump_like=True,
+        use_smoothing=True,
+        fixed_weight=1.2,
+    )
+
+
+def ablation_no_adaptive_weight(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    return improved_astar_search_configurable(
+        grid,
+        start,
+        goal,
+        use_adaptive_weight=False,
+        use_jump_like=True,
+        use_smoothing=True,
+        fixed_weight=1.2,
+    )
+
+
+def ablation_no_jump_like(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    return improved_astar_search_configurable(
+        grid,
+        start,
+        goal,
+        use_adaptive_weight=True,
+        use_jump_like=False,
+        use_smoothing=True,
+        fixed_weight=1.2,
+    )
+
+
+def ablation_no_smoothing(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    return improved_astar_search_configurable(
+        grid,
+        start,
+        goal,
+        use_adaptive_weight=True,
+        use_jump_like=True,
+        use_smoothing=False,
+        fixed_weight=1.2,
+    )

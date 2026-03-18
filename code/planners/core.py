@@ -39,7 +39,7 @@ def adaptive_alpha(obs_ratio: float) -> float:
     # Keep alpha in a safe numeric range to avoid over-greedy behavior.
     obs_ratio = min(max(obs_ratio, 0.01), 0.99)
     raw = abs(math.log(obs_ratio))
-    return min(max(raw, 0.8), 1.8)
+    return min(max(raw, 0.9), 1.8)
 
 
 def reconstruct_path(came_from: dict, current: Point) -> List[Point]:

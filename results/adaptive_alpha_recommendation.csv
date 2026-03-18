@@ -1,0 +1,2 @@
+﻿candidate,effective_samples,success_rate,runtime_ms_mean,path_length_mean,turn_count_mean,expanded_nodes_mean,d_runtime_vs_fixed,d_path_vs_fixed,d_turn_vs_fixed,d_expand_vs_fixed
+log_clip_0.9_1.8,60,1.0,53.66608166950755,405.95755144461083,0.55,2244.55,-85.81402666265299,-0.05887805458883122,0.0,-3747.5999999999995
