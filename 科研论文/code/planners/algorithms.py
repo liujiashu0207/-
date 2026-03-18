@@ -116,15 +116,21 @@ def jps_like_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, ob
     return astar_search(grid, start, goal, heuristic_mode="octile", weight=1.0, use_jump_like=True)
 
 
-def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
-    alpha = adaptive_alpha(obstacle_ratio(grid))
+def improved_astar_search(
+    grid: np.ndarray,
+    start: Point,
+    goal: Point,
+    precomputed_alpha: float = None,
+) -> Dict[str, object]:
+    # precomputed_alpha: 同一地图多次搜索时可传入预计算值，避免重复遍历全图计算障碍率
+    alpha = precomputed_alpha if precomputed_alpha is not None else adaptive_alpha(obstacle_ratio(grid))
     res = astar_search(
         grid,
         start,
         goal,
         heuristic_mode="octile",
         weight=alpha,
-        use_jump_like=True,
+        use_jump_like=False,  # JPS-like 已确认为负优化，彻底关闭
     )
     if not res["success"]:
         return res
