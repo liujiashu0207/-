@@ -131,7 +131,6 @@ def run_candidate(name: str, alpha_fn: Callable[[float], float], tasks: List[Dic
             t["goal"],
             heuristic_mode="octile",
             weight=alpha,
-            use_jump_like=True,
         )
         runtime_ms = (time.perf_counter() - t0) * 1000.0
 

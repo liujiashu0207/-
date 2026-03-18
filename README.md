@@ -5,6 +5,14 @@
 
 ---
 
+## 唯一源代码目录
+
+**`code/`** 是本项目的唯一源代码目录，所有实验、可视化脚本均从此处导入。
+
+> `科研论文/code/` 已于 Round5 归档至 `results/obsolete_pre_v3/科研论文_code_archive/`，不再维护，不得引用。
+
+---
+
 ## 算法创新点
 
 本项目在标准 A* 基础上提出三项改进：
@@ -13,13 +21,15 @@
 2. **自适应权重 α**：根据地图障碍率自动调节搜索激进程度（`α = clip(|ln(ρ)|, 1.0, 1.8)`）。
 3. **两阶段路径平滑**：冗余点删除（Line-of-Sight）+ 拐角插值平滑，大幅减少转弯次数。
 
+> **注**：JPS-like 扩展策略已于 Round4/5 彻底移除，全仓库 grep 确认无任何残留。
+
 ---
 
 ## 从零复现 v3 实验结果（单命令）
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/liujiashu0207/-.git
+git clone https://github.com/liujiashu0202/-.git
 cd -
 
 # 2. 安装依赖（仅需 numpy）
@@ -36,7 +46,7 @@ python code/visualize/plot_path_comparison.py
 # 输出：figures/path_comparison_6maps_v3_Manus.png
 ```
 
-> **注意**：实验脚本使用相对路径，必须在项目根目录（`-/`）下运行。
+> **注意**：所有脚本使用相对路径，必须在项目根目录（`-/`）下运行。
 
 ---
 
@@ -50,7 +60,7 @@ python code/visualize/plot_path_comparison.py
 | `results/exp_fix15_v3_street_raw_records.csv` | Street 地图原始记录（900 行） |
 | `results/exp_fix15_v3_wc3_raw_records.csv` | WC3 地图原始记录（900 行） |
 
-> **已废弃（obsolete）**：`results/obsolete_pre_v3/` 和 `results/obsolete_ab10/` 目录下的所有文件均为旧版实验数据，不得用于论文引用。
+> **已废弃（obsolete）**：`results/obsolete_pre_v3/` 目录下的所有文件均为旧版实验数据，不得用于论文引用。
 
 ---
 
@@ -58,7 +68,7 @@ python code/visualize/plot_path_comparison.py
 
 | 指标 | 传统 A* | 改进 A* | 变化 |
 |---|---|---|---|
-| 运行时间 | 基准 | **0.8676x** | 快约 13% |
+| 运行时间 | 基准 | **0.8728x** | 快约 13% |
 | 路径长度 | 基准 | **-0.30** | 缩短 |
 | 转弯次数 | 基准 | **-1.10 次** | 减少 |
 
@@ -68,23 +78,22 @@ python code/visualize/plot_path_comparison.py
 
 ```
 .
-├── code/
+├── code/                     ← 唯一源代码目录
 │   ├── planners/
 │   │   ├── algorithms.py     # 核心算法（A*, 改进A*, 消融变体）
 │   │   └── core.py           # 基础工具（启发函数、路径平滑等）
 │   ├── experiments/
 │   │   └── run_fix15_v3.py   # 主实验脚本（strict scen 口径）
 │   └── visualize/
-│       └── plot_path_comparison.py  # 路径对比可视化
+│       └── plot_path_comparison.py  # 路径对比可视化（相对路径，跨平台）
 ├── data/
 │   ├── benchmark_maps/       # Moving AI 真实地图（.map 格式）
 │   └── benchmark_scens/      # 固定测试任务（.scen 格式）
 ├── results/
-│   ├── exp_fix15_v3_*.csv    # 权威实验结果（v3）
-│   └── obsolete_pre_v3/      # 已废弃的旧版数据
+│   ├── exp_fix15_v3_*.csv    # 权威实验结果（v3，唯一口径）
+│   └── obsolete_pre_v3/      # 已废弃的旧版数据（含 科研论文/code 归档）
 ├── figures/                  # 实验图表
 └── 科研论文/
-    ├── code/planners/        # 论文版代码（与 code/ 同步）
     └── docs/                 # 论文草稿与分析报告
 ```
 
