@@ -36,10 +36,11 @@ def obstacle_ratio(grid: np.ndarray) -> float:
 
 
 def adaptive_alpha(obs_ratio: float) -> float:
-    # Keep alpha in a safe numeric range to avoid over-greedy behavior.
+    # Keep alpha >= 1.0 to guarantee admissibility (no under-estimation).
+    # Upper bound 1.8 allows mild over-weighting on sparse maps for speed.
     obs_ratio = min(max(obs_ratio, 0.01), 0.99)
     raw = abs(math.log(obs_ratio))
-    return min(max(raw, 0.8), 1.8)
+    return min(max(raw, 1.0), 1.8)
 
 
 def reconstruct_path(came_from: dict, current: Point) -> List[Point]:
@@ -111,9 +112,16 @@ def simplify_path(path: List[Point], grid: np.ndarray) -> List[Point]:
     return kept
 
 
-def smooth_corners(path: List[Point]) -> List[Point]:
+def smooth_corners(path: List[Point], grid: np.ndarray) -> List[Point]:
+    """对路径拐角进行加权平均平滑，跳过会落在障碍物上的插值点。
+
+    修复说明（Manus 2026-03-18）：原版本不检查插值点是否为障碍物，
+    导致平滑后路径可能穿越障碍物（物理非法）。修复后若插值点为障碍物
+    或越界，则保留原始拐点，放弃该处平滑。
+    """
     if len(path) < 3:
         return path[:]
+    h, w = grid.shape
     smoothed: List[Point] = [path[0]]
     for i in range(1, len(path) - 1):
         ax, ay = path[i - 1]
@@ -121,7 +129,11 @@ def smooth_corners(path: List[Point]) -> List[Point]:
         cx, cy = path[i + 1]
         mx = int(round((ax + 2 * bx + cx) / 4.0))
         my = int(round((ay + 2 * by + cy) / 4.0))
-        smoothed.append((mx, my))
+        # 关键修复：插值点越界或为障碍物时，保留原始拐点
+        if 0 <= mx < h and 0 <= my < w and grid[mx, my] == 0:
+            smoothed.append((mx, my))
+        else:
+            smoothed.append((bx, by))
     smoothed.append(path[-1])
     # Remove duplicates caused by integer rounding.
     deduped = [smoothed[0]]

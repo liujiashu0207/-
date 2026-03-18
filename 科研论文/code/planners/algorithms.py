@@ -130,7 +130,7 @@ def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[s
         return res
     p0 = res["path"]
     p1 = simplify_path(p0, grid)
-    p2 = smooth_corners(p1)
+    p2 = smooth_corners(p1, grid)
     res["path"] = p2
     res["path_length"] = path_length(p2)
     res["turn_count"] = turn_count(p2)
