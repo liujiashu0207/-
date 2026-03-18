@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import csv
 from collections import defaultdict
 from pathlib import Path
@@ -16,11 +16,9 @@ if str(CODE_DIR) not in sys.path:
 
 from planners import (
     ablation_no_adaptive_weight,
-    ablation_no_jump_like,
     ablation_no_smoothing,
     dijkstra_search,
     improved_astar_search,
-    jps_like_search,
     vanilla_astar_search,
     weighted_astar_search,
 )
@@ -71,14 +69,12 @@ def _algo_dict(include_ablation: bool = False):
         "dijkstra": dijkstra_search,
         "astar": vanilla_astar_search,
         "weighted_astar": lambda g, s, t: weighted_astar_search(g, s, t, weight=1.2),
-        "jps_like": jps_like_search,
         "improved_astar": improved_astar_search,
     }
     if include_ablation:
         algos.update(
             {
                 "ablation_no_adaptive": ablation_no_adaptive_weight,
-                "ablation_no_jump": ablation_no_jump_like,
                 "ablation_no_smoothing": ablation_no_smoothing,
             }
         )
@@ -150,7 +146,6 @@ def save_summary(rows: List[Dict[str, object]], path: Path):
 
 
 def plot_runtime(summary: List[Dict[str, object]], out_png: Path):
-    # Pick one representative map to keep output simple.
     map_names = sorted({r["map_name"] for r in summary})
     focus_map = map_names[0]
     candidates = [r for r in summary if r["map_name"] == focus_map]
@@ -203,7 +198,6 @@ def main():
                 raise ValueError(f"No .scen rows found in: {scen_dir}")
 
     if benchmark_maps:
-        # Benchmark mode: use external authoritative maps.
         for map_path in benchmark_maps:
             grid = load_grid_map(map_path)
             h, w = grid.shape
@@ -291,7 +285,6 @@ def main():
                     valid_count += 1
                     attempt_id += 1
     else:
-        # Random mode: legacy behavior.
         for size in sizes:
             for ratio in ratios:
                 valid_count = 0

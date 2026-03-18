@@ -1,4 +1,5 @@
-import math
+﻿import math
+import os
 from collections import deque
 from typing import Iterable, List, Optional, Tuple
 
@@ -36,11 +37,16 @@ def obstacle_ratio(grid: np.ndarray) -> float:
 
 
 def adaptive_alpha(obs_ratio: float) -> float:
-    # Keep alpha in a safe numeric range to avoid over-greedy behavior.
+    # Alpha floor supports AB test via env var: A_STAR_ALPHA_FLOOR in {0.9, 1.0, ...}
     obs_ratio = min(max(obs_ratio, 0.01), 0.99)
     raw = abs(math.log(obs_ratio))
-    # Keep heuristic admissibility behavior safer on dense maps.
-    return min(max(raw, 1.0), 1.8)
+    floor = 0.9
+    try:
+        floor = float(os.environ.get("A_STAR_ALPHA_FLOOR", "0.9"))
+    except (TypeError, ValueError):
+        floor = 0.9
+    floor = min(max(floor, 0.8), 1.2)
+    return min(max(raw, floor), 1.8)
 
 
 def reconstruct_path(came_from: dict, current: Point) -> List[Point]:
@@ -112,32 +118,18 @@ def simplify_path(path: List[Point], grid: np.ndarray) -> List[Point]:
     return kept
 
 
-def smooth_corners(path: List[Point], grid: np.ndarray) -> List[Point]:
+def smooth_corners(path: List[Point]) -> List[Point]:
     if len(path) < 3:
         return path[:]
     smoothed: List[Point] = [path[0]]
-    h, w = grid.shape
     for i in range(1, len(path) - 1):
-        ax, ay = smoothed[-1]
+        ax, ay = path[i - 1]
         bx, by = path[i]
         cx, cy = path[i + 1]
         mx = int(round((ax + 2 * bx + cx) / 4.0))
         my = int(round((ay + 2 * by + cy) / 4.0))
-        candidate = (mx, my)
-        in_bounds = 0 <= mx < h and 0 <= my < w
-        if not in_bounds or grid[mx, my] == 1:
-            smoothed.append((bx, by))
-            continue
-        # Only keep smoothed points that preserve obstacle-free visibility.
-        if not line_of_sight(grid, smoothed[-1], candidate):
-            smoothed.append((bx, by))
-            continue
-        if not line_of_sight(grid, candidate, (cx, cy)):
-            smoothed.append((bx, by))
-            continue
-        smoothed.append(candidate)
+        smoothed.append((mx, my))
     smoothed.append(path[-1])
-    # Remove duplicates caused by integer rounding.
     deduped = [smoothed[0]]
     for p in smoothed[1:]:
         if p != deduped[-1]:
@@ -155,7 +147,6 @@ def sample_start_goal(grid: np.ndarray, rng: np.random.Generator) -> Optional[Tu
     if len(free) < 2:
         return None
 
-    # Try multiple pairs and keep only reachable start-goal samples.
     for _ in range(80):
         idx = rng.choice(len(free), size=2, replace=False)
         s = tuple(int(v) for v in free[idx[0]])
