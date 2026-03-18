@@ -55,12 +55,9 @@ def check_remote_state() -> Dict[str, object]:
         checks["ok"] = False
         checks["issues"].append(msg)
 
-    try:
-        core = blob("科研论文/code/planners/core.py")
-        alg = blob("科研论文/code/planners/algorithms.py")
-    except subprocess.CalledProcessError:
-        core = blob("code/planners/core.py")
-        alg = blob("code/planners/algorithms.py")
+    # Round5 收口后，唯一源码目录为 code/，科研论文/code/ 已归档
+    core = blob("code/planners/core.py")
+    alg = blob("code/planners/algorithms.py")
 
     if "return min(max(raw, 1.0), 1.8)" in core:
         checks["notes"].append("adaptive_alpha 下界=1.0：通过")
@@ -87,14 +84,27 @@ def check_remote_state() -> Dict[str, object]:
     else:
         checks["notes"].append("未发现 use_jump_like=True：通过")
 
+    # v3 口径审查：确认唯一权威实验脚本存在且不使用随机起终点
+    try:
+        run_v3 = blob("code/experiments/run_fix15_v3.py")
+        if "sample_start_goal(" in run_v3:
+            issue("run_fix15_v3.py 仍使用随机起终点，应改为 strict scen 口径。")
+        elif "scen" in run_v3.lower():
+            checks["notes"].append("run_fix15_v3.py 使用 strict scen 口径：通过")
+        else:
+            issue("run_fix15_v3.py 未发现 scen 口径逻辑，请检查。")
+    except subprocess.CalledProcessError:
+        issue("未找到 run_fix15_v3.py，唯一权威实验脚本丢失。")
+
+    # v2 deprecated 检查：确认文件头含有 DEPRECATED 警告
     try:
         run_v2 = blob("code/experiments/run_fix15_v2.py")
-        if "sample_start_goal(" in run_v2:
-            issue("run_fix15_v2.py 仍使用随机起终点(sample_start_goal)，不满足 strict scen 口径。")
-        if "scen" in run_v2.lower():
-            checks["notes"].append("run_fix15_v2.py 含 scen 逻辑")
+        if "DEPRECATED" in run_v2:
+            checks["notes"].append("run_fix15_v2.py 已标记 DEPRECATED：通过")
+        else:
+            issue("run_fix15_v2.py 未标记 DEPRECATED，存在误用风险。")
     except subprocess.CalledProcessError:
-        checks["notes"].append("未找到 run_fix15_v2.py（可忽略）")
+        checks["notes"].append("未找到 run_fix15_v2.py（已删除或归档，可忽略）")
 
     try:
         viz = blob("code/visualize/plot_path_comparison.py")

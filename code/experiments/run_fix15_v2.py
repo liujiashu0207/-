@@ -1,4 +1,8 @@
 """
+[DEPRECATED - 不得用于论文结论]
+本脚本使用随机起终点（sample_start_goal），实验口径不统一，数据已被证明严重失真（路径长度、转弯次数均被大幅夹大）。
+请使用唯一权威实验脚本： code/experiments/run_fix15_v3.py（strict scen 口径）。
+
 重跑 fix15 基准实验（v2）
 Manus 2026-03-18：在修复 smooth_corners 穿模漏洞和 adaptive_alpha 下界后重跑。
 
