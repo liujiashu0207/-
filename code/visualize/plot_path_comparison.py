@@ -1,184 +1,229 @@
 """
-路径对比可视化脚本
-在 6 张典型真实地图上，分别运行 A* 和改进 A*，并排展示路径对比
-作者：Manus AI | 2026-03-18
+路径对比可视化脚本 v2
+Manus 2026-03-19 Round3 修复：
+- 所有路径改为相对于项目根目录的相对路径，不含 /home/ubuntu 绝对路径
+- 移除 fc-cache 和 Noto Sans CJK SC 系统字体依赖
+- 仅使用 matplotlib 默认字体（DejaVu Sans），可选 CJK fallback 但不影响运行
+- 起终点改为从 .scen 文件读取固定任务（与 v3 实验口径一致），不再随机采样
+- 在 Windows/Linux/macOS 项目根目录均可直接运行：
+    python code/visualize/plot_path_comparison.py
 """
 
 import sys
-import os
+from pathlib import Path
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.colors import ListedColormap
-import random
 
-# 安装并设置中文字体
-import subprocess
-subprocess.run(['fc-cache', '-fv'], capture_output=True)
-plt.rcParams['font.family'] = ['Noto Sans CJK SC', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
+# ── 路径锚点（相对于本文件，不含绝对路径）────────────────────────────────
+ROOT     = Path(__file__).resolve().parents[2]   # research_project/
+CODE_DIR = ROOT / "code"
+if str(CODE_DIR) not in sys.path:
+    sys.path.insert(0, str(CODE_DIR))
 
-sys.path.insert(0, '/home/ubuntu/research_project/科研论文/code')
-sys.path.insert(0, '/home/ubuntu/research_project')
+# ── 字体：仅使用 matplotlib 默认字体，不依赖系统安装 ─────────────────────
+# 可选 CJK fallback：若系统有 Noto Sans CJK SC 则自动使用，否则静默跳过
+try:
+    import matplotlib.font_manager as fm
+    _cjk_fonts = [f.name for f in fm.fontManager.ttflist
+                  if "CJK" in f.name or "Noto" in f.name]
+    if _cjk_fonts:
+        plt.rcParams["font.family"] = [_cjk_fonts[0], "DejaVu Sans"]
+    else:
+        plt.rcParams["font.family"] = ["DejaVu Sans"]
+except Exception:
+    plt.rcParams["font.family"] = ["DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
 
-from planners.algorithms import astar_search, improved_astar_search
+from planners import vanilla_astar_search, improved_astar_search
+from utils.map_loader import load_grid_map
 
-# ── 地图加载 ──────────────────────────────────────────────────────────────────
-def load_map(map_path):
-    """加载 Moving AI .map 格式地图"""
-    with open(map_path, 'r') as f:
-        lines = f.readlines()
-    # 跳过 header
-    data_start = 0
-    height, width = 0, 0
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if line.startswith('height'):
-            height = int(line.split()[1])
-        elif line.startswith('width'):
-            width = int(line.split()[1])
-        elif line == 'map':
-            data_start = i + 1
-            break
-    grid = np.zeros((height, width), dtype=np.int8)
-    for r, line in enumerate(lines[data_start:data_start + height]):
-        for c, ch in enumerate(line.rstrip('\n')):
-            if ch in ('@', 'O', 'T', 'W'):
-                grid[r, c] = 1
-    return grid
 
-def find_valid_pair(grid, seed=42, max_tries=500):
-    """在地图上随机找一对距离适中的可达起终点"""
-    rng = random.Random(seed)
-    free = list(zip(*np.where(grid == 0)))
+# ── scen 解析（与 run_fix15_v3.py 保持一致）──────────────────────────────
+def parse_scen_long_task(scen_path: Path, min_opt_len: float = 100.0):
+    """
+    从 scen 文件中读取第一条 optimal_length >= min_opt_len 的任务，
+    确保路径足够长，具有可视化代表性。
+    坐标转换：scen (col, row) → grid (row, col)。
+    若无满足条件的任务，则返回 optimal_length 最大的那条。
+    """
+    best = None
+    best_len = -1.0
+    with scen_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("version"):
+                continue
+            parts = line.split()
+            if len(parts) < 9:
+                continue
+            sc, sr = int(parts[4]), int(parts[5])
+            gc, gr = int(parts[6]), int(parts[7])
+            opt_len = float(parts[8])
+            if opt_len == 0.0:
+                continue
+            if opt_len > best_len:
+                best = ((sr, sc), (gr, gc))
+                best_len = opt_len
+            if opt_len >= min_opt_len:
+                return ((sr, sc), (gr, gc))
+    return best  # fallback: 返回最长任务
+
+
+# ── 地图绘制 ──────────────────────────────────────────────────────────────
+def draw_path_on_ax(ax, grid, path, color, linewidth, label):
     h, w = grid.shape
-    min_dist = max(h, w) * 0.3
-    for _ in range(max_tries):
-        s = rng.choice(free)
-        g = rng.choice(free)
-        dist = abs(s[0]-g[0]) + abs(s[1]-g[1])
-        if dist >= min_dist:
-            return s, g
-    # fallback
-    return free[0], free[-1]
-
-# ── 绘图函数 ──────────────────────────────────────────────────────────────────
-def draw_map_with_paths(ax, grid, path_a, path_b, title, label_a='A*', label_b='改进 A*'):
-    """在一个 axes 上绘制地图 + 两条路径"""
-    h, w = grid.shape
-    
-    # 地图背景：白色可通行，深灰障碍
     img = np.ones((h, w, 3))
-    img[grid == 1] = [0.2, 0.2, 0.2]   # 障碍：深灰
-    img[grid == 0] = [0.97, 0.97, 0.95] # 可通行：米白
-    ax.imshow(img, origin='upper', interpolation='nearest')
-    
-    # 绘制 A* 路径（蓝色，较细）
-    if path_a and len(path_a) > 1:
-        ys_a = [p[0] for p in path_a]
-        xs_a = [p[1] for p in path_a]
-        ax.plot(xs_a, ys_a, color='#2196F3', linewidth=1.5, alpha=0.85,
-                label=label_a, zorder=3)
-    
-    # 绘制改进 A* 路径（橙红色，较粗）
-    if path_b and len(path_b) > 1:
-        ys_b = [p[0] for p in path_b]
-        xs_b = [p[1] for p in path_b]
-        ax.plot(xs_b, ys_b, color='#FF5722', linewidth=2.0, alpha=0.90,
-                label=label_b, zorder=4)
-    
-    # 起终点标记
-    if path_a:
-        s, g = path_a[0], path_a[-1]
-        ax.scatter([s[1]], [s[0]], c='#4CAF50', s=80, zorder=5, marker='o', edgecolors='white', linewidths=0.8)
-        ax.scatter([g[1]], [g[0]], c='#F44336', s=80, zorder=5, marker='*', edgecolors='white', linewidths=0.8)
-    
-    ax.set_title(title, fontsize=9, fontweight='bold', pad=4)
-    ax.axis('off')
+    img[grid == 1] = [0.20, 0.20, 0.20]
+    img[grid == 0] = [0.97, 0.97, 0.95]
+    ax.imshow(img, origin="upper", interpolation="nearest")
+    if path and len(path) > 1:
+        ys = [p[0] for p in path]
+        xs = [p[1] for p in path]
+        ax.plot(xs, ys, color=color, linewidth=linewidth, alpha=0.90,
+                label=label, zorder=3)
+    if path:
+        s, g = path[0], path[-1]
+        ax.scatter([s[1]], [s[0]], c="#4CAF50", s=80, zorder=5,
+                   marker="o", edgecolors="white", linewidths=0.8)
+        ax.scatter([g[1]], [g[0]], c="#F44336", s=80, zorder=5,
+                   marker="*", edgecolors="white", linewidths=0.8)
+    ax.axis("off")
 
-# ── 主程序 ────────────────────────────────────────────────────────────────────
+# ── 6 张地图配置（地图文件 + scen 文件，均为相对路径）────────────────────
+# 每张地图选取 optimal_length >= 100 的第一条 scen 任务，确保路径具有可视化代表性
+
 MAP_CONFIGS = [
-    # (地图路径, 显示名称, 种子)
-    ('data/benchmark_maps/dao-map/arena.map',           'DAO: arena',         42),
-    ('data/benchmark_maps/dao-map/brc000d.map',         'DAO: brc000d',       77),
-    ('data/benchmark_maps/street-map/Berlin_0_256.map', 'Street: Berlin_256', 42),
-    ('data/benchmark_maps/street-map/Berlin_1_256.map', 'Street: Berlin_1',   88),
-    ('data/benchmark_maps/wc3-map/battleground.map',    'WC3: battleground',  42),
-    ('data/benchmark_maps/wc3-map/bootybay.map',        'WC3: bootybay',      55),
+    {
+        "map":  "data/benchmark_maps/dao-map/arena.map",
+        "scen": "data/benchmark_scens/dao/arena.map.scen",
+        "label": "DAO: arena",
+    },
+    {
+        "map":  "data/benchmark_maps/dao-map/brc000d.map",
+        "scen": "data/benchmark_scens/dao/brc000d.map.scen",
+        "label": "DAO: brc000d",
+    },
+    {
+        "map":  "data/benchmark_maps/street-map/Berlin_0_256.map",
+        "scen": "data/benchmark_scens/street/Berlin_0_256.map.scen",
+        "label": "Street: Berlin_0_256",
+    },
+    {
+        "map":  "data/benchmark_maps/street-map/Berlin_1_256.map",
+        "scen": "data/benchmark_scens/street/Berlin_1_256.map.scen",
+        "label": "Street: Berlin_1_256",
+    },
+    {
+        "map":  "data/benchmark_maps/wc3-map/battleground.map",
+        "scen": "data/benchmark_scens/wc3maps512/battleground.map.scen",
+        "label": "WC3: battleground",
+    },
+    {
+        "map":  "data/benchmark_maps/wc3-map/bootybay.map",
+        "scen": "data/benchmark_scens/wc3maps512/bootybay.map.scen",
+        "label": "WC3: bootybay",
+    },
 ]
 
-BASE = '/home/ubuntu/research_project'
 
-fig, axes = plt.subplots(3, 4, figsize=(20, 15))
-fig.patch.set_facecolor('#1a1a2e')
+def main():
+    fig, axes = plt.subplots(3, 4, figsize=(20, 15))
+    fig.patch.set_facecolor("#1a1a2e")
+    fig.suptitle(
+        "Path Planning Comparison: Standard A*  vs  Improved A*\n"
+        "Blue = Standard A*  |  Orange-Red = Improved A*  |  "
+        "Green dot = Start  |  Red star = Goal",
+        fontsize=13, color="white", fontweight="bold", y=0.98,
+    )
 
-# 大标题
-fig.suptitle('Path Planning Comparison: Standard A*  vs  Improved A*\n'
-             'Blue = Standard A*  |  Orange-Red = Improved A*  |  Green dot = Start  |  Red star = Goal',
-             fontsize=13, color='white', fontweight='bold', y=0.98)
+    stats = []
 
-stats = []
+    for idx, cfg in enumerate(MAP_CONFIGS):
+        map_path  = ROOT / cfg["map"]
+        scen_path = ROOT / cfg["scen"]
+        label     = cfg["label"]
 
-for idx, (map_rel, name, seed) in enumerate(MAP_CONFIGS):
-    map_path = os.path.join(BASE, map_rel)
-    if not os.path.exists(map_path):
-        print(f'[WARN] 地图不存在: {map_path}')
-        continue
-    
-    grid = load_map(map_path)
-    start, goal = find_valid_pair(grid, seed=seed)
-    
-    # 运行两个算法
-    res_a = astar_search(grid, start, goal)
-    res_b = improved_astar_search(grid, start, goal)
-    
-    path_a = res_a.get('path', []) if res_a.get('success') else []
-    path_b = res_b.get('path', []) if res_b.get('success') else []
-    
-    rt_a  = res_a.get('runtime_ms', 0)
-    rt_b  = res_b.get('runtime_ms', 0)
-    pl_a  = res_a.get('path_length', 0)
-    pl_b  = res_b.get('path_length', 0)
-    tc_a  = res_a.get('turn_count', 0)
-    tc_b  = res_b.get('turn_count', 0)
-    
-    stats.append((name, rt_a, rt_b, pl_a, pl_b, tc_a, tc_b))
-    
-    # 左图：A*，右图：改进 A*
-    col_a = idx * 2 % 4
-    col_b = col_a + 1
-    row   = idx // 2
-    
-    ax_a = axes[row][col_a]
-    ax_b = axes[row][col_b]
-    
-    title_a = f'{name}\nA*  |  {rt_a:.2f}ms  |  len={pl_a:.1f}  |  turns={tc_a}'
-    title_b = f'{name}\nImproved A*  |  {rt_b:.2f}ms  |  len={pl_b:.1f}  |  turns={tc_b}'
-    
-    draw_map_with_paths(ax_a, grid, path_a, [], title_a, label_a='A*')
-    draw_map_with_paths(ax_b, grid, [], path_b, title_b, label_b='Improved A*')
-    
-    # 标题颜色
-    ax_a.set_title(title_a, fontsize=8, color='#90CAF9', pad=3)
-    ax_b.set_title(title_b, fontsize=8, color='#FFAB91', pad=3)
-    
-    print(f'[{name}] A*: {rt_a:.2f}ms, len={pl_a:.1f}, tc={tc_a}  |  改进: {rt_b:.2f}ms, len={pl_b:.1f}, tc={tc_b}')
+        if not map_path.exists():
+            print(f"[WARN] map not found: {cfg['map']}")
+            continue
+        if not scen_path.exists():
+            print(f"[WARN] scen not found: {cfg['scen']}")
+            continue
 
-# 背景色
-for ax in axes.flat:
-    ax.set_facecolor('#1a1a2e')
+        grid  = load_grid_map(map_path)
+        h, w  = grid.shape
 
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-out_path = '/home/ubuntu/research_project/figures/path_comparison_6maps_Manus.png'
-os.makedirs(os.path.dirname(out_path), exist_ok=True)
-plt.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='#1a1a2e')
-print(f'\n路径对比图已保存: {out_path}')
+        # 读取 scen 固定任务：选取 optimal_length >= 100 的第一条任务，确保路径具有可视化代表性
+        task = parse_scen_long_task(scen_path, min_opt_len=100.0)
+        if task is None:
+            print(f"[WARN] {label}: no valid task in scen, skipping")
+            continue
+        start, goal = task
 
-# 打印汇总统计
-print('\n=== 汇总 ===')
-print(f'{"地图":<25} {"A*时间":>8} {"改进时间":>8} {"时间比":>7} {"A*长度":>8} {"改进长度":>8} {"A*转弯":>7} {"改进转弯":>8}')
-for name, rt_a, rt_b, pl_a, pl_b, tc_a, tc_b in stats:
-    ratio = rt_b/rt_a if rt_a > 0 else 0
-    print(f'{name:<25} {rt_a:>8.2f} {rt_b:>8.2f} {ratio:>7.3f}x {pl_a:>8.1f} {pl_b:>8.1f} {tc_a:>7} {tc_b:>8}')
+        # 边界与障碍检查
+        if not (0 <= start[0] < h and 0 <= start[1] < w and
+                0 <= goal[0]  < h and 0 <= goal[1]  < w):
+            print(f"[WARN] {label}: scen task out of bounds, skipping")
+            continue
+        if grid[start] == 1 or grid[goal] == 1:
+            print(f"[WARN] {label}: start/goal on obstacle, skipping")
+            continue
+
+        res_a = vanilla_astar_search(grid, start, goal)
+        res_b = improved_astar_search(grid, start, goal)
+
+        path_a = res_a.get("path", []) if res_a.get("success") else []
+        path_b = res_b.get("path", []) if res_b.get("success") else []
+        rt_a   = res_a.get("runtime_ms", 0)
+        rt_b   = res_b.get("runtime_ms", 0)
+        pl_a   = res_a.get("path_length", 0)
+        pl_b   = res_b.get("path_length", 0)
+        tc_a   = res_a.get("turn_count", 0)
+        tc_b   = res_b.get("turn_count", 0)
+        stats.append((label, rt_a, rt_b, pl_a, pl_b, tc_a, tc_b))
+
+        row   = idx // 2
+        col_a = (idx % 2) * 2
+        col_b = col_a + 1
+        ax_a  = axes[row][col_a]
+        ax_b  = axes[row][col_b]
+
+        title_a = (f"{label}\nA*  |  {rt_a:.2f}ms  |  "
+                   f"len={pl_a:.1f}  |  turns={tc_a}")
+        title_b = (f"{label}\nImproved A*  |  {rt_b:.2f}ms  |  "
+                   f"len={pl_b:.1f}  |  turns={tc_b}")
+
+        draw_path_on_ax(ax_a, grid, path_a, "#2196F3", 1.5, "A*")
+        draw_path_on_ax(ax_b, grid, path_b, "#FF5722", 2.0, "Improved A*")
+        ax_a.set_title(title_a, fontsize=8, color="#90CAF9", pad=3)
+        ax_b.set_title(title_b, fontsize=8, color="#FFAB91", pad=3)
+
+        print(f"[{label}] A*: {rt_a:.2f}ms len={pl_a:.1f} tc={tc_a}"
+              f"  |  Improved: {rt_b:.2f}ms len={pl_b:.1f} tc={tc_b}")
+
+    for ax in axes.flat:
+        ax.set_facecolor("#1a1a2e")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+    out_path = ROOT / "figures" / "path_comparison_6maps_v3_Manus.png"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(str(out_path), dpi=150, bbox_inches="tight",
+                facecolor="#1a1a2e")
+    print(f"\n[saved] {out_path.relative_to(ROOT)}")
+
+    # 汇总统计
+    print("\n=== Summary ===")
+    header = f"{'Map':<28} {'A*(ms)':>8} {'Imp(ms)':>8} {'Ratio':>7} "
+    header += f"{'A*len':>8} {'Implen':>8} {'A*tc':>6} {'Imptc':>7}"
+    print(header)
+    for name, rt_a, rt_b, pl_a, pl_b, tc_a, tc_b in stats:
+        ratio = rt_b / rt_a if rt_a > 0 else float("nan")
+        print(f"{name:<28} {rt_a:>8.2f} {rt_b:>8.2f} {ratio:>7.3f}x "
+              f"{pl_a:>8.1f} {pl_b:>8.1f} {tc_a:>6} {tc_b:>7}")
+
+
+if __name__ == "__main__":
+    main()
