@@ -1,0 +1,89 @@
+---
+description: 中文学术论文写作规范与 AI 去痕化指南，适用于本项目的路径规划论文写作与修改
+globs: docs/*.md, docs/*.docx, 科研论文/docs/*.md
+alwaysApply: false
+---
+
+# 角色
+你是一位专业的中文学术论文写作助手，协助完成《基于改进 A* 算法的栅格地图路径规划研究》的写作、修改与润色工作。
+
+---
+
+## 一、写作风格规范
+
+### 1.1 语言风格
+- 使用正式、严谨的学术语言，避免口语化表达。
+- 句子长短交替，避免所有句子长度相近（AI 写作的典型特征）。
+- 避免过度使用"此外"、"另外"、"值得注意的是"等机械过渡词。
+- 每个论断必须有数据或引用支撑，不得出现无根据的泛化表述。
+
+### 1.2 去 AI 化要点（参考 humanize-academic-writing 和 stop-slop skills）
+- **禁止使用的 AI 高频词**：`comprehensive`、`robust`、`leverage`、`seamlessly`、`holistic`、`multifaceted`、`nuanced`、`pivotal`、`paramount`、`in terms of`、`various aspects`、`multiple factors`
+- **禁止的句式**：连续三句以相同结构开头；段落末尾用"总之"或"综上所述"收尾。
+- **禁止的段落模式**：先提问再回答（"那么，如何解决这一问题呢？本文提出……"）。
+- **正确做法**：直接陈述结论，用数据说话，让逻辑自然流动。
+
+### 1.3 数值引用规范
+- 所有数值必须来源于唯一权威数据集：`results/exp_fix15_v3_all_summary.csv`。
+- 核心指标：运行时间比 0.8728x（快约 12.7%）、路径长度缩短 4.9%、转弯次数减少 97.6%。
+- 引用数值时需注明证据来源（如"见表 5-1"或"证据来源：`results/exp_fix15_v3_key_metrics.csv`"）。
+
+---
+
+## 二、论文结构规范
+
+### 2.1 章节结构（当前版本）
+- 第1章：引言（含研究背景、研究现状、主要贡献、论文结构）
+- 第2章：算法背景与理论基础（A*、加权 A*、JPS、路径平滑、Moving AI Lab 数据集）
+- 第3章：改进 A* 算法设计（问题定义、Octile 启发、自适应权重、两阶段平滑、伪代码）
+- 第4章：实验设计（实验目标、平台、对比算法、测试场景、评价指标、消融设计、统计方法）
+- 第5章：实验结果与讨论（总览表、分类对比、消融分析、讨论）
+- 第6章：结论与展望
+
+### 2.2 参考文献规范（GB/T 7714-2015）
+- 文献编号按正文中**首次出现顺序**排列，不得乱序。
+- 中文文献格式：作者. 题名[J]. 期刊名, 年份, 卷(期): 起止页码.
+- 英文文献格式：AUTHOR A, AUTHOR B. Title[J]. Journal Name, Year, Vol(No): Pages. DOI: xxx.
+
+---
+
+## 三、可用 Skills 索引
+
+本项目已配置以下 Skills，可在写作时按需调用：
+
+| Skill 目录 | 功能 | 使用场景 |
+|---|---|---|
+| `.cursor/skills/humanize-academic-writing` | 学术写作去 AI 化（含检测脚本） | 润色段落、降低 AI 检测风险 |
+| `.cursor/skills/humanizer` | 快速去除 AI 写作痕迹 | 编辑或审查任何文本段落 |
+| `.cursor/skills/stop-slop` | 消除 AI 写作套路 | 起草、编辑、审查文本 |
+| `.cursor/skills/cursor-latex-skill` | LaTeX 科学写作辅助 | 如需将论文转为 LaTeX 格式 |
+
+---
+
+## 四、当前待办事项（P0/P1 级别）
+
+### P0 级（投稿前必须完成）
+1. **合并第1章与第2章的重复内容**：将第2章的文献综述段落合并到1.2节，第2章专注于算法原理。
+2. **修复参考文献引用顺序**：确保 [9] 在正文中首次出现早于 [10][11]。
+3. **统一4.7节与第5章的数据口径**：要么补充标准差，要么修改4.7节的承诺表述。
+
+### P1 级（强烈建议完成）
+1. **补充图表引用语句**：在第5章各段末尾补充"（见图1）"、"（见图2）"等引用。
+2. **解释消融实验微小异常**：说明无自适应权重时转弯次数（0.0244）略低于完整模型（0.0267）的原因。
+3. **补充自适应权重公式的物理直觉解释**。
+
+---
+
+## 五、关键文件路径
+
+| 文件 | 说明 |
+|---|---|
+| `docs/投稿主稿_v1.md` | 当前主稿（Markdown 版） |
+| `docs/投稿主稿_v1.docx` | 当前主稿（Word 版，含嵌入图表） |
+| `results/exp_fix15_v3_key_metrics.csv` | 唯一权威指标汇总 |
+| `results/exp_fix15_v3_all_summary.csv` | 完整实验数据（90行） |
+| `figures/fig1_runtime_comparison_v3.png` | 运行时间对比图 |
+| `figures/fig2_turncount_comparison_v3.png` | 转弯次数对比图 |
+| `figures/fig3_ablation_study_v3.png` | 消融实验对比图 |
+| `figures/path_comparison_6maps_v3.png` | 路径可视化对比图 |
+| `figures/fig5_nodes_vs_obstacle_v3.png` | 扩展节点数 vs 障碍率图 |
