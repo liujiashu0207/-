@@ -1,0 +1,10 @@
+给 Manus 的下一步指令（自动生成）
+
+请严格执行以下修复，不要改其他参数：
+1. run_fix15_v2.py 仍使用随机起终点(sample_start_goal)，不满足 strict scen 口径。
+2. 可视化脚本存在绝对路径绑定（/home/...）。
+
+完成后请：
+- 推送到 origin/main
+- 在提交信息注明已修复项
+- 回传新的关键结果文件路径（如 exp_fix15_v3_key_metrics.csv）
