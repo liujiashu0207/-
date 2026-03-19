@@ -44,7 +44,7 @@ COLORS = {
 ALGO_LABELS = {
     "dijkstra":              "Dijkstra",
     "astar":                 "A* (baseline)",
-    "weighted_astar":        "Weighted A* (α=1.5)",
+    "weighted_astar":        "Weighted A* (α=1.2)",
     "improved_astar":        "Improved A* (ours)",
     "ablation_no_adaptive":  "Ablation: no adaptive α",
     "ablation_no_smoothing": "Ablation: no smoothing",
