@@ -1,10 +1,43 @@
 ﻿import argparse
 import json
+import re
 import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+
+# 绝对路径检测：仅匹配实际代码中的路径赋值/Path构造/字符串常量，忽略注释行
+# 匹配模式：非注释行中出现 /home/、/root/、C:\、D:\ 等绝对路径字符串
+_ABS_PATH_PATTERN = re.compile(
+    r'''^(?!\s*[#"'\'\\]{0,3}\s*[-*]|\s*\'\'\'|\s*""")  # 排除注释行和文档字符串行
+    .*                                                     # 任意前缀
+    (?:"/home/|'/home/|=/home/|\(/home/                   # Unix 绝对路径（引号/赋值/括号开头）
+    |"C:\\\\|'C:\\\\|"D:\\\\|'D:\\\\)              # Windows 绝对路径
+    ''',
+    re.VERBOSE | re.MULTILINE,
+)
+
+
+def has_hardcoded_abs_path(source: str) -> bool:
+    """检测源码中是否存在硬编码绝对路径（忽略注释和说明文字）。"""
+    for line in source.splitlines():
+        stripped = line.strip()
+        # 跳过纯注释行（# 开头）和文档字符串行（- 开头的说明文字）
+        if stripped.startswith('#'):
+            continue
+        # 跳过三引号文档字符串内的说明行（以 - 或 * 开头的列表项）
+        if stripped.startswith('- ') or stripped.startswith('* '):
+            continue
+        # 检测实际代码行中是否含有绝对路径字符串常量
+        # 要求：/home/ 或 C:\ 出现在引号内、赋值右侧或函数调用中
+        if re.search(r'["\'](?:/home/|/root/|C:\\\\|D:\\\\)', line):
+            return True
+        # 检测 Path("/home/...") 或 Path('/home/...') 形式
+        if re.search(r'Path\s*\(["\'](?:/home/|/root/)', line):
+            return True
+    return False
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,10 +141,10 @@ def check_remote_state() -> Dict[str, object]:
 
     try:
         viz = blob("code/visualize/plot_path_comparison.py")
-        if "/home/" in viz or "\\home\\" in viz:
-            issue("可视化脚本存在绝对路径绑定（/home/...）。")
+        if has_hardcoded_abs_path(viz):
+            issue("可视化脚本存在硬编码绝对路径（如 /home/... 或 C:\\...），请改为相对路径。")
         else:
-            checks["notes"].append("可视化脚本未发现绝对路径：通过")
+            checks["notes"].append("可视化脚本未发现硬编码绝对路径：通过")
     except subprocess.CalledProcessError:
         checks["notes"].append("未找到可视化脚本（可忽略）")
 

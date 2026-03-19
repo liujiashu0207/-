@@ -59,8 +59,10 @@ python code/visualize/plot_path_comparison.py
 | `results/exp_fix15_v3_dao_raw_records.csv` | DAO 地图原始记录（900 行） |
 | `results/exp_fix15_v3_street_raw_records.csv` | Street 地图原始记录（900 行） |
 | `results/exp_fix15_v3_wc3_raw_records.csv` | WC3 地图原始记录（900 行） |
+| `docs/结论-证据对照表_v3.md` | 每条论文结论对应的 CSV 字段与图文件名（唯一权威引用路径） |
 
-> **已废弃（obsolete）**：`results/obsolete_pre_v3/` 目录下的所有文件均为旧版实验数据，不得用于论文引用。
+> **已废弃（obsolete）**：`results/obsolete_pre_v3/` 目录下的所有文件均为旧版实验数据，不得用于论文引用。  
+> **注**：`科研论文/docs/结论-证据对照表_v3_Manus.md` 为历史路径，已同步至 `docs/结论-证据对照表_v3.md`，请统一引用主路径。
 
 ---
 
@@ -89,12 +91,14 @@ python code/visualize/plot_path_comparison.py
 ├── data/
 │   ├── benchmark_maps/       # Moving AI 真实地图（.map 格式）
 │   └── benchmark_scens/      # 固定测试任务（.scen 格式）
+├── docs/                     ← 项目级权威文档（唯一引用路径）
+│   └── 结论-证据对照表_v3.md # 每条论文结论 → CSV 字段 + 图文件名（可追溯）
 ├── results/
 │   ├── exp_fix15_v3_*.csv    # 权威实验结果（v3，唯一口径）
 │   └── obsolete_pre_v3/      # 已废弃的旧版数据（含 科研论文/code 归档）
 ├── figures/                  # 实验图表
 └── 科研论文/
-    └── docs/                 # 论文草稿与分析报告
+    └── docs/                 # 论文草稿与分析报告（科研论文/docs/结论-证据对照表_v3_Manus.md 已同步至 docs/）
 ```
 
 ---
