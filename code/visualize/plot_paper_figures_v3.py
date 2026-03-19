@@ -1,302 +1,253 @@
 """
-论文核心对比图生成脚本 v1
-Manus 2026-03-19
-生成3张论文图：
-  1. 运行时间对比图（按地图类型分组，4种算法）
-  2. 转弯次数对比图（按地图类型分组，4种算法）
-  3. 消融实验对比图（4种配置 × 3个指标）
-数据来源：results/exp_fix15_v3_all_summary.csv（唯一权威数据集）
-输出路径：figures/
+Generate publication-quality figures for the paper.
+  fig1: Runtime comparison by map type (bar chart)
+  fig2: Turn count comparison by map type (bar chart)
+  fig3: Ablation study (grouped bar chart)
+
+Usage:
+    python code/visualize/plot_paper_figures_v3.py
 """
-import sys
-from pathlib import Path
+
 import csv
 from collections import defaultdict
+from pathlib import Path
 
-import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import numpy as np
 
-# ── 路径锚点（相对于本文件，不含绝对路径）────────────────────────────────
-ROOT = Path(__file__).resolve().parents[2]   # research_project/
-DATA_PATH = ROOT / "results" / "exp_fix15_v3_all_summary.csv"
-FIG_DIR = ROOT / "figures"
-FIG_DIR.mkdir(exist_ok=True)
+plt.rcParams.update({
+    "font.family": "SimHei",
+    "axes.unicode_minus": False,
+    "font.size": 11,
+    "axes.titlesize": 13,
+    "axes.labelsize": 12,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "legend.fontsize": 9,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.15,
+})
 
-# ── 字体设置（不依赖系统 CJK 字体）────────────────────────────────────────
-plt.rcParams["font.family"] = ["DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
-plt.rcParams["figure.dpi"] = 150
-plt.rcParams["savefig.dpi"] = 150
+ROOT = Path(__file__).resolve().parents[2]
+RESULTS_DIR = ROOT / "results"
+FIGURES_DIR = ROOT / "figures"
+SUMMARY_CSV = RESULTS_DIR / "exp_fix15_v3_all_summary.csv"
 
-# ── 配色方案（学术风格，色盲友好）──────────────────────────────────────────
-COLORS = {
-    "astar":           "#2166ac",   # 蓝
-    "improved_astar":  "#d6604d",   # 红
-    "weighted_astar":  "#4dac26",   # 绿
-    "dijkstra":        "#7b3294",   # 紫
-    "ablation_no_adaptive":  "#f4a582",  # 浅橙
-    "ablation_no_smoothing": "#92c5de",  # 浅蓝
+MAP_TYPE_ORDER = ["DAO", "Street", "WC3"]
+MAP_TYPE_LABELS_CN = {"DAO": "DAO 游戏地图", "Street": "Street 城市地图", "WC3": "WC3 魔兽地图"}
+
+ALGO_COLORS = {
+    "dijkstra":       "#95a5a6",
+    "astar":          "#3498db",
+    "weighted_astar": "#e67e22",
+    "improved_astar": "#e74c3c",
+}
+ALGO_LABELS_CN = {
+    "dijkstra":       "Dijkstra",
+    "astar":          "传统 A*",
+    "weighted_astar": "加权 A*(α=1.2)",
+    "improved_astar": "改进 A*(本文)",
 }
 
-ALGO_LABELS = {
-    "dijkstra":              "Dijkstra",
-    "astar":                 "A* (baseline)",
-    "weighted_astar":        "Weighted A* (α=1.2)",
-    "improved_astar":        "Improved A* (ours)",
-    "ablation_no_adaptive":  "Ablation: no adaptive α",
-    "ablation_no_smoothing": "Ablation: no smoothing",
-}
 
-MAP_TYPE_LABELS = {
-    "dao":    "DAO\n(game maps)",
-    "street": "Street\n(city maps)",
-    "wc3":    "WC3\n(Warcraft maps)",
-    "all":    "Overall\n(15 maps)",
-}
+def load_summary():
+    rows = []
+    with SUMMARY_CSV.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            r["runtime_ms_mean"] = float(r["runtime_ms_mean"])
+            r["path_length_mean"] = float(r["path_length_mean"])
+            r["turn_count_mean"] = float(r["turn_count_mean"])
+            r["expanded_nodes_mean"] = float(r["expanded_nodes_mean"])
+            r["obstacle_ratio"] = float(r["obstacle_ratio"])
+            rows.append(r)
+    return rows
 
-# ── 数据加载 ────────────────────────────────────────────────────────────────
-def load_data():
-    rows = list(csv.DictReader(open(DATA_PATH, encoding="utf-8")))
-    data = defaultdict(lambda: defaultdict(list))
+
+def aggregate_by_map_type(rows, metric):
+    per_type = defaultdict(lambda: defaultdict(list))
     for r in rows:
-        mtype = r["map_type"]
-        algo = r["algorithm"]
-        data[mtype][algo].append({
-            "rt":  float(r["runtime_ms_mean"]),
-            "pl":  float(r["path_length_mean"]),
-            "tc":  float(r["turn_count_mean"]),
-            "en":  float(r["expanded_nodes_mean"]),
-        })
-    return data
-
-def mean(lst, key):
-    return sum(x[key] for x in lst) / len(lst) if lst else 0.0
-
-def get_by_type_and_algo(data, mtypes, algos, key):
-    """返回 {mtype: {algo: mean_value}} 结构"""
+        if r["map_name"].startswith("GLOBAL"):
+            continue
+        per_type[r["map_type"]][r["algorithm"]].append(r[metric])
     result = {}
-    for mt in mtypes:
+    for mt in MAP_TYPE_ORDER:
         result[mt] = {}
-        for algo in algos:
-            vals = data.get(mt, {}).get(algo, [])
-            result[mt][algo] = mean(vals, key)
-    # 全局均值
-    result["all"] = {}
-    for algo in algos:
-        all_vals = []
-        for mt in mtypes:
-            all_vals.extend(data.get(mt, {}).get(algo, []))
-        result["all"][algo] = mean(all_vals, key)
+        for algo in ALGO_COLORS:
+            vals = per_type[mt].get(algo, [])
+            result[mt][algo] = np.mean(vals) if vals else 0.0
     return result
 
 
-# ── 图1：运行时间对比（4种主算法，按地图类型分组）──────────────────────────
-def plot_runtime(data):
-    mtypes = ["dao", "street", "wc3", "all"]
-    algos  = ["dijkstra", "astar", "weighted_astar", "improved_astar"]
-    rt_data = get_by_type_and_algo(data, ["dao", "street", "wc3"], algos, "rt")
+def fig1_runtime(rows):
+    data = aggregate_by_map_type(rows, "runtime_ms_mean")
 
-    x = np.arange(len(mtypes))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5),
+                                    gridspec_kw={"width_ratios": [1, 1.2]})
+
+    x = np.arange(len(MAP_TYPE_ORDER))
     width = 0.18
-    offsets = [-1.5, -0.5, 0.5, 1.5]
+    algos = list(ALGO_COLORS.keys())
 
-    fig, ax = plt.subplots(figsize=(9, 5.5))
     for i, algo in enumerate(algos):
-        vals = [rt_data[mt][algo] for mt in mtypes]
-        bars = ax.bar(x + offsets[i] * width, vals, width,
-                      color=COLORS[algo], label=ALGO_LABELS[algo],
-                      edgecolor="white", linewidth=0.5)
-        # 在柱顶标注数值
+        vals = [data[mt][algo] for mt in MAP_TYPE_ORDER]
+        bars = ax1.bar(x + i * width, vals, width, label=ALGO_LABELS_CN[algo],
+                       color=ALGO_COLORS[algo], edgecolor="white", linewidth=0.5)
         for bar, v in zip(bars, vals):
-            if v > 0:
-                ax.text(bar.get_x() + bar.get_width() / 2,
-                        bar.get_height() + 0.0008,
-                        f"{v:.4f}", ha="center", va="bottom",
-                        fontsize=6.5, rotation=45)
+            ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                     f"{v:.4f}", ha="center", va="bottom", fontsize=7)
 
-    ax.set_xticks(x)
-    ax.set_xticklabels([MAP_TYPE_LABELS[mt] for mt in mtypes], fontsize=10)
-    ax.set_ylabel("Average Runtime (ms)", fontsize=11)
-    ax.set_title("Figure 1: Runtime Comparison by Map Type\n"
-                 "(15 maps × 30 trials, strict .scen benchmark)", fontsize=11)
-    ax.legend(loc="upper right", fontsize=8.5, framealpha=0.9)
-    ax.set_ylim(0, max(rt_data["all"]["dijkstra"] * 1.25, 0.6))
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(axis="y", alpha=0.3, linestyle="--")
+    ax1.set_xlabel("地图类型")
+    ax1.set_ylabel("平均运行时间 (ms)")
+    ax1.set_title("(a) 全部算法")
+    ax1.set_xticks(x + width * 1.5)
+    ax1.set_xticklabels([MAP_TYPE_LABELS_CN[mt] for mt in MAP_TYPE_ORDER])
+    ax1.legend(loc="upper left", framealpha=0.9, fontsize=8)
+    ax1.set_ylim(0, ax1.get_ylim()[1] * 1.15)
+    ax1.grid(axis="y", alpha=0.3, linestyle="--")
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
 
-    # 标注改善幅度
-    astar_all = rt_data["all"]["astar"]
-    imp_all   = rt_data["all"]["improved_astar"]
-    pct = (astar_all - imp_all) / astar_all * 100
-    ax.annotate(f"Improved A* vs A*:\n−{pct:.1f}% overall",
-                xy=(x[-1] + offsets[3] * width, imp_all),
-                xytext=(x[-1] - 0.6, imp_all + 0.05),
-                fontsize=8, color=COLORS["improved_astar"],
-                arrowprops=dict(arrowstyle="->", color=COLORS["improved_astar"], lw=1.2))
-
-    fig.tight_layout()
-    out = FIG_DIR / "fig1_runtime_comparison_v3.png"
-    fig.savefig(out, bbox_inches="tight")
-    plt.close(fig)
-    print(f"[OK] 图1 已保存：{out}")
-    return out
-
-
-# ── 图2：转弯次数对比（4种主算法，按地图类型分组）──────────────────────────
-def plot_turncount(data):
-    mtypes = ["dao", "street", "wc3", "all"]
-    algos  = ["dijkstra", "astar", "weighted_astar", "improved_astar"]
-    tc_data = get_by_type_and_algo(data, ["dao", "street", "wc3"], algos, "tc")
-
-    x = np.arange(len(mtypes))
-    width = 0.18
-    offsets = [-1.5, -0.5, 0.5, 1.5]
-
-    fig, ax = plt.subplots(figsize=(9, 5.5))
-    for i, algo in enumerate(algos):
-        vals = [tc_data[mt][algo] for mt in mtypes]
-        bars = ax.bar(x + offsets[i] * width, vals, width,
-                      color=COLORS[algo], label=ALGO_LABELS[algo],
-                      edgecolor="white", linewidth=0.5)
+    focus_algos = ["astar", "weighted_astar", "improved_astar"]
+    width2 = 0.22
+    for i, algo in enumerate(focus_algos):
+        vals = [data[mt][algo] for mt in MAP_TYPE_ORDER]
+        bars = ax2.bar(x + i * width2, vals, width2, label=ALGO_LABELS_CN[algo],
+                       color=ALGO_COLORS[algo], edgecolor="white", linewidth=0.5)
         for bar, v in zip(bars, vals):
-            if v > 0.01:
-                ax.text(bar.get_x() + bar.get_width() / 2,
-                        bar.get_height() + 0.01,
-                        f"{v:.3f}", ha="center", va="bottom",
-                        fontsize=7, rotation=45)
-            elif v > 0:
-                ax.text(bar.get_x() + bar.get_width() / 2,
-                        bar.get_height() + 0.01,
-                        f"{v:.4f}", ha="center", va="bottom",
-                        fontsize=6, rotation=45)
+            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.0005,
+                     f"{v:.4f}", ha="center", va="bottom", fontsize=7.5)
 
-    ax.set_xticks(x)
-    ax.set_xticklabels([MAP_TYPE_LABELS[mt] for mt in mtypes], fontsize=10)
-    ax.set_ylabel("Average Turn Count", fontsize=11)
-    ax.set_title("Figure 2: Turn Count Comparison by Map Type\n"
-                 "(15 maps × 30 trials, strict .scen benchmark)", fontsize=11)
-    ax.legend(loc="upper right", fontsize=8.5, framealpha=0.9)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(axis="y", alpha=0.3, linestyle="--")
+    ax2.set_xlabel("地图类型")
+    ax2.set_ylabel("平均运行时间 (ms)")
+    ax2.set_title("(b) A* 系列放大对比")
+    ax2.set_xticks(x + width2)
+    ax2.set_xticklabels([MAP_TYPE_LABELS_CN[mt] for mt in MAP_TYPE_ORDER])
+    ax2.legend(loc="upper left", framealpha=0.9, fontsize=8)
+    ax2.grid(axis="y", alpha=0.3, linestyle="--")
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
 
-    # 标注改善幅度
-    astar_all = tc_data["all"]["astar"]
-    imp_all   = tc_data["all"]["improved_astar"]
-    pct = (astar_all - imp_all) / astar_all * 100
-    ax.annotate(f"Improved A* vs A*:\n−{pct:.1f}% overall\n({astar_all:.3f}→{imp_all:.4f})",
-                xy=(x[-1] + offsets[3] * width, imp_all + 0.02),
-                xytext=(x[-1] - 1.0, astar_all * 0.6),
-                fontsize=8, color=COLORS["improved_astar"],
-                arrowprops=dict(arrowstyle="->", color=COLORS["improved_astar"], lw=1.2))
-
+    fig.suptitle("图 1  各算法运行时间对比（按地图类型）", fontsize=13, y=1.02)
     fig.tight_layout()
-    out = FIG_DIR / "fig2_turncount_comparison_v3.png"
-    fig.savefig(out, bbox_inches="tight")
+    out = FIGURES_DIR / "fig1_runtime_comparison_v3.png"
+    fig.savefig(out)
     plt.close(fig)
-    print(f"[OK] 图2 已保存：{out}")
-    return out
+    print(f"[OK] {out}")
 
 
-# ── 图3：消融实验对比（4种配置 × 3个指标，归一化展示）──────────────────────
-def plot_ablation(data):
-    """
-    4 种配置：传统A*（基线）、无自适应权重、无路径平滑、完整改进A*
-    3 个指标：运行时间、路径长度、转弯次数
-    每个指标以传统A*为基准归一化（=1.0），便于在同一图中比较
-    """
-    configs = ["astar", "ablation_no_adaptive", "ablation_no_smoothing", "improved_astar"]
+def fig2_turncount(rows):
+    data = aggregate_by_map_type(rows, "turn_count_mean")
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5), gridspec_kw={"width_ratios": [1, 1]})
+
+    x = np.arange(len(MAP_TYPE_ORDER))
+    width = 0.22
+    algos_left = ["dijkstra", "astar", "weighted_astar"]
+    for i, algo in enumerate(algos_left):
+        vals = [data[mt][algo] for mt in MAP_TYPE_ORDER]
+        bars = ax1.bar(x + i * width, vals, width, label=ALGO_LABELS_CN[algo],
+                       color=ALGO_COLORS[algo], edgecolor="white", linewidth=0.5)
+        for bar, v in zip(bars, vals):
+            ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+                     f"{v:.3f}", ha="center", va="bottom", fontsize=7)
+
+    ax1.set_xlabel("地图类型")
+    ax1.set_ylabel("平均转弯次数")
+    ax1.set_title("(a) Dijkstra / A* / 加权A*")
+    ax1.set_xticks(x + width)
+    ax1.set_xticklabels([MAP_TYPE_LABELS_CN[mt] for mt in MAP_TYPE_ORDER])
+    ax1.legend(fontsize=8)
+    ax1.grid(axis="y", alpha=0.3, linestyle="--")
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    vals_improved = [data[mt]["improved_astar"] for mt in MAP_TYPE_ORDER]
+    bars = ax2.bar(x, vals_improved, 0.5, color=ALGO_COLORS["improved_astar"],
+                   edgecolor="white", linewidth=0.5, label=ALGO_LABELS_CN["improved_astar"])
+    for bar, v in zip(bars, vals_improved):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.001,
+                 f"{v:.4f}", ha="center", va="bottom", fontsize=8)
+
+    ax2.set_xlabel("地图类型")
+    ax2.set_ylabel("平均转弯次数")
+    ax2.set_title("(b) 改进 A*（本文）")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels([MAP_TYPE_LABELS_CN[mt] for mt in MAP_TYPE_ORDER])
+    ax2.legend(fontsize=8)
+    ax2.grid(axis="y", alpha=0.3, linestyle="--")
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+
+    fig.suptitle("图 2  各算法转弯次数对比（按地图类型）", fontsize=13, y=1.02)
+    fig.tight_layout()
+    out = FIGURES_DIR / "fig2_turncount_comparison_v3.png"
+    fig.savefig(out)
+    plt.close(fig)
+    print(f"[OK] {out}")
+
+
+def fig3_ablation(rows):
+    ablation_rows = [r for r in rows if r["map_name"].startswith("GLOBAL")]
+    if not ablation_rows:
+        print("[WARN] No ablation data found, skipping fig3.")
+        return
+
+    configs = ["improved_astar", "ablation_no_adaptive", "ablation_no_smoothing", "astar"]
     config_labels = [
-        "A* (baseline)",
-        "No adaptive α",
-        "No smoothing",
-        "Improved A* (ours)",
+        "完整改进A*\n(本文)",
+        "消融: 无自适应\n权重",
+        "消融: 无路径\n平滑",
+        "传统 A*\n(基线)",
     ]
-    config_colors = [
-        COLORS["astar"],
-        COLORS["ablation_no_adaptive"],
-        COLORS["ablation_no_smoothing"],
-        COLORS["improved_astar"],
-    ]
-    metrics = ["rt", "pl", "tc"]
-    metric_labels = ["Runtime\n(normalized)", "Path Length\n(normalized)", "Turn Count\n(normalized)"]
+    config_colors = ["#e74c3c", "#f39c12", "#9b59b6", "#3498db"]
 
-    # 计算全局均值
-    all_vals = {}
-    for cfg in configs:
-        all_vals[cfg] = {}
-        for mt in ["dao", "street", "wc3"]:
-            for r in data.get(mt, {}).get(cfg, []):
-                for k in metrics:
-                    all_vals[cfg].setdefault(k, []).append(r[k])
-        for k in metrics:
-            all_vals[cfg][k] = sum(all_vals[cfg].get(k, [0])) / max(len(all_vals[cfg].get(k, [1])), 1)
+    metrics = ["runtime_ms_mean", "path_length_mean", "turn_count_mean", "expanded_nodes_mean"]
+    metric_labels = ["运行时间 (ms)", "路径长度", "转弯次数", "扩展节点数"]
 
-    # 归一化（以 astar 为基准）
-    baseline = all_vals["astar"]
-    norm_vals = {}
-    for cfg in configs:
-        norm_vals[cfg] = {k: all_vals[cfg][k] / baseline[k] for k in metrics}
+    data_map = {r["algorithm"]: r for r in ablation_rows}
 
-    x = np.arange(len(metrics))
-    width = 0.18
-    offsets = [-1.5, -0.5, 0.5, 1.5]
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    axes = axes.flatten()
 
-    fig, ax = plt.subplots(figsize=(9, 5.5))
-    for i, cfg in enumerate(configs):
-        vals = [norm_vals[cfg][k] for k in metrics]
-        bars = ax.bar(x + offsets[i] * width, vals, width,
-                      color=config_colors[i], label=config_labels[i],
-                      edgecolor="white", linewidth=0.5)
+    for idx, (metric, label) in enumerate(zip(metrics, metric_labels)):
+        ax = axes[idx]
+        vals = [data_map[c][metric] for c in configs]
+        bars = ax.bar(range(len(configs)), vals, color=config_colors,
+                      edgecolor="white", linewidth=0.5, width=0.6)
         for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + 0.01,
-                    f"{v:.3f}", ha="center", va="bottom",
-                    fontsize=7.5, fontweight="bold" if cfg == "improved_astar" else "normal")
+            fmt = f"{v:.4f}" if v < 1 else f"{v:.2f}"
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(vals) * 0.02,
+                    fmt, ha="center", va="bottom", fontsize=8)
+        ax.set_ylabel(label)
+        ax.set_xticks(range(len(configs)))
+        ax.set_xticklabels(config_labels, fontsize=8)
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.set_ylim(0, max(vals) * 1.2)
 
-    # 基准线
-    ax.axhline(y=1.0, color="gray", linestyle="--", linewidth=1.2, alpha=0.7, label="A* baseline (=1.0)")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(metric_labels, fontsize=10)
-    ax.set_ylabel("Normalized Value (A* = 1.0)", fontsize=11)
-    ax.set_title("Figure 3: Ablation Study\n"
-                 "(15 maps × 30 trials, strict .scen benchmark, lower is better)", fontsize=11)
-    ax.legend(loc="upper right", fontsize=8.5, framealpha=0.9)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.grid(axis="y", alpha=0.3, linestyle="--")
-    ax.set_ylim(0, max(norm_vals["astar"]["tc"] * 1.3, 1.5))
-
-    # 标注关键数值
-    imp_rt = norm_vals["improved_astar"]["rt"]
-    imp_tc = norm_vals["improved_astar"]["tc"]
-    ax.text(x[0] + offsets[3] * width, imp_rt - 0.08,
-            f"−{(1-imp_rt)*100:.1f}%", ha="center", fontsize=7.5,
-            color=COLORS["improved_astar"], fontweight="bold")
-    ax.text(x[2] + offsets[3] * width, imp_tc + 0.04,
-            f"−{(1-imp_tc)*100:.1f}%", ha="center", fontsize=7.5,
-            color=COLORS["improved_astar"], fontweight="bold")
-
-    fig.tight_layout()
-    out = FIG_DIR / "fig3_ablation_study_v3.png"
-    fig.savefig(out, bbox_inches="tight")
+    fig.suptitle("图 3  消融实验结果（全局15张地图均值）", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = FIGURES_DIR / "fig3_ablation_study_v3.png"
+    fig.savefig(out)
     plt.close(fig)
-    print(f"[OK] 图3 已保存：{out}")
-    return out
+    print(f"[OK] {out}")
+
+
+def main():
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    rows = load_summary()
+    print(f"Loaded {len(rows)} rows from {SUMMARY_CSV}")
+    fig1_runtime(rows)
+    fig2_turncount(rows)
+    fig3_ablation(rows)
+    print("All figures generated.")
 
 
 if __name__ == "__main__":
-    print(f"[INFO] 数据来源：{DATA_PATH}")
-    data = load_data()
-    f1 = plot_runtime(data)
-    f2 = plot_turncount(data)
-    f3 = plot_ablation(data)
-    print(f"\n[DONE] 3张图已生成：")
-    print(f"  {f1}")
-    print(f"  {f2}")
-    print(f"  {f3}")
+    main()
