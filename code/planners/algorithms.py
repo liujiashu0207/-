@@ -9,9 +9,12 @@ from .core import (
     adaptive_alpha,
     euclidean_distance,
     line_of_sight,
+    local_obstacle_ratio,
     neighbors8,
+    node_adaptive_alpha,
     obstacle_ratio,
     octile_distance,
+    precompute_local_alpha_map,
     path_length,
     reconstruct_path,
     simplify_path,
@@ -58,13 +61,19 @@ def astar_search(
     heuristic_mode: str = "octile",
     weight: float = 1.0,
     use_jump_like: bool = False,
+    alpha_map: np.ndarray = None,
 ) -> Dict[str, object]:
+    """
+    A* search. If alpha_map is provided, use per-node weight from it;
+    otherwise use the constant `weight`.
+    """
     t0 = time.perf_counter()
     open_heap: List[Tuple[float, Point]] = []
+    start_w = float(alpha_map[start[0], start[1]]) if alpha_map is not None else weight
     heapq.heappush(open_heap, (0.0, start))
     came_from: Dict[Point, Point] = {}
     g_score: Dict[Point, float] = {start: 0.0}
-    f_score: Dict[Point, float] = {start: weight * _heuristic(start, goal, heuristic_mode)}
+    f_score: Dict[Point, float] = {start: start_w * _heuristic(start, goal, heuristic_mode)}
     closed = set()
     expanded = 0
 
@@ -93,7 +102,8 @@ def astar_search(
             if tentative_g < g_score.get(nb, float("inf")):
                 came_from[nb] = current
                 g_score[nb] = tentative_g
-                f = tentative_g + weight * _heuristic(nb, goal, heuristic_mode)
+                w = float(alpha_map[nb[0], nb[1]]) if alpha_map is not None else weight
+                f = tentative_g + w * _heuristic(nb, goal, heuristic_mode)
                 f_score[nb] = f
                 heapq.heappush(open_heap, (f, nb))
 
@@ -133,23 +143,32 @@ def improved_astar_search_configurable(
     grid: np.ndarray,
     start: Point,
     goal: Point,
-    use_adaptive_weight: bool = True,
-    use_jump_like: bool = False,
+    use_node_adaptive: bool = True,
     use_smoothing: bool = True,
+    local_radius: int = 5,
     fixed_weight: float = 1.0,
-    precomputed_alpha: Optional[float] = None,
+    precomputed_alpha_map: np.ndarray = None,
 ) -> Dict[str, object]:
-    if use_adaptive_weight:
-        alpha = precomputed_alpha if precomputed_alpha is not None else adaptive_alpha(obstacle_ratio(grid))
-    else:
-        alpha = fixed_weight
+    """
+    Improved A* with node-level adaptive weight and two-stage smoothing.
+
+    use_node_adaptive=True:  α varies per node based on local obstacle density.
+    use_node_adaptive=False: α = fixed_weight (constant, for ablation).
+    precomputed_alpha_map:   pass in to avoid recomputing per call (for batch runs).
+    """
+    am = None
+    if use_node_adaptive:
+        am = precomputed_alpha_map if precomputed_alpha_map is not None \
+             else precompute_local_alpha_map(grid, local_radius)
+
     res = astar_search(
         grid,
         start,
         goal,
         heuristic_mode="octile",
-        weight=alpha,
-        use_jump_like=use_jump_like,
+        weight=fixed_weight,
+        use_jump_like=False,
+        alpha_map=am,
     )
     if not res["success"]:
         return res
@@ -170,52 +189,29 @@ def improved_astar_search(
     grid: np.ndarray,
     start: Point,
     goal: Point,
-    precomputed_alpha: Optional[float] = None,
 ) -> Dict[str, object]:
+    """完整改进 A*：Octile + 节点级自适应权重 + 两阶段平滑。"""
     return improved_astar_search_configurable(
-        grid,
-        start,
-        goal,
-        use_adaptive_weight=True,
-        use_jump_like=False,
+        grid, start, goal,
+        use_node_adaptive=True,
         use_smoothing=True,
-        fixed_weight=1.0,
-        precomputed_alpha=precomputed_alpha,
     )
 
 
 def ablation_no_adaptive_weight(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    """消融：关闭自适应权重（固定 α=1.0），保留平滑。"""
     return improved_astar_search_configurable(
-        grid,
-        start,
-        goal,
-        use_adaptive_weight=False,
-        use_jump_like=False,
-        use_smoothing=True,
-        fixed_weight=1.0,
-    )
-
-
-def ablation_no_jump_like(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
-    # NOTE: With jump_like now disabled by default, this ablation is redundant.
-    return improved_astar_search_configurable(
-        grid,
-        start,
-        goal,
-        use_adaptive_weight=True,
-        use_jump_like=False,
+        grid, start, goal,
+        use_node_adaptive=False,
         use_smoothing=True,
         fixed_weight=1.0,
     )
 
 
 def ablation_no_smoothing(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    """消融：保留节点级自适应权重，关闭平滑。"""
     return improved_astar_search_configurable(
-        grid,
-        start,
-        goal,
-        use_adaptive_weight=True,
-        use_jump_like=False,
+        grid, start, goal,
+        use_node_adaptive=True,
         use_smoothing=False,
-        fixed_weight=1.0,
     )

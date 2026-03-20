@@ -42,10 +42,55 @@ def obstacle_ratio(grid: np.ndarray) -> float:
     return float(np.mean(grid == 1))
 
 
+def local_obstacle_ratio(grid: np.ndarray, node: Point, radius: int = 5) -> float:
+    """Compute obstacle ratio in a (2*radius+1) x (2*radius+1) window around node."""
+    x, y = node
+    h, w = grid.shape
+    x0 = max(0, x - radius)
+    x1 = min(h, x + radius + 1)
+    y0 = max(0, y - radius)
+    y1 = min(w, y + radius + 1)
+    window = grid[x0:x1, y0:y1]
+    return float(np.mean(window == 1))
+
+
+def precompute_local_alpha_map(grid: np.ndarray, radius: int = 5) -> np.ndarray:
+    """Precompute node-level alpha for every cell using integral image (O(1) per query)."""
+    h, w = grid.shape
+    obstacle = (grid == 1).astype(np.float64)
+    # Integral image for O(1) window sum
+    integral = np.zeros((h + 1, w + 1), dtype=np.float64)
+    for i in range(h):
+        for j in range(w):
+            integral[i+1, j+1] = obstacle[i, j] + integral[i, j+1] + integral[i+1, j] - integral[i, j]
+    
+    alpha_map = np.ones((h, w), dtype=np.float64)
+    for i in range(h):
+        for j in range(w):
+            x0 = max(0, i - radius)
+            x1 = min(h, i + radius + 1)
+            y0 = max(0, j - radius)
+            y1 = min(w, j + radius + 1)
+            area = (x1 - x0) * (y1 - y0)
+            obs_count = integral[x1, y1] - integral[x0, y1] - integral[x1, y0] + integral[x0, y0]
+            local_ratio = obs_count / area
+            local_ratio = min(max(local_ratio, 0.01), 0.99)
+            raw = abs(math.log(local_ratio))
+            alpha_map[i, j] = min(max(raw, 1.0), 1.8)
+    return alpha_map
+
+
 def adaptive_alpha(obs_ratio: float) -> float:
+    """Map-level adaptive alpha (kept for backward compatibility and ablation)."""
     obs_ratio = min(max(obs_ratio, 0.01), 0.99)
     raw = abs(math.log(obs_ratio))
-    return min(max(raw, 1.0), 1.8)  # ensure alpha is not below 1.0
+    return min(max(raw, 1.0), 1.8)
+
+
+def node_adaptive_alpha(grid: np.ndarray, node: Point, radius: int = 5) -> float:
+    """Node-level adaptive alpha based on local obstacle density."""
+    local_ratio = local_obstacle_ratio(grid, node, radius)
+    return adaptive_alpha(local_ratio)
 
 
 def reconstruct_path(came_from: dict, current: Point) -> List[Point]:
