@@ -1,114 +1,100 @@
 # 改进 A* 路径规划算法
 
-> 面向移动机器人的自适应加权 A* 路径规划算法研究  
-> 基于 Moving AI Lab 真实地图基准测试（DAO / Street / WC3，共 15 张地图）
+> **论文题目**：面向移动机器人的自适应加权 A* 路径规划算法研究
+> **目标期刊**：《计算机工程与应用》（北大核心 + EI）
+> **实验基准**：Moving AI Lab 真实地图（DAO / Street / WC3，共 15 张地图，2700 条记录）
 
 ---
 
-## 唯一源代码目录
+## 仓库结构
 
-**`code/`** 是本项目的唯一源代码目录，所有实验、可视化脚本均从此处导入。
+```
+.
+├── code/                        # 核心算法与实验代码
+│   ├── planners/                # 算法实现（core.py 为主文件）
+│   ├── experiments/             # 实验脚本（run_fix15_v3.py 为权威实验）
+│   ├── stats/                   # 统计分析脚本
+│   ├── utils/                   # 工具函数
+│   └── visualize/               # 可视化脚本
+├── data/                        # 实验数据集
+│   ├── benchmark_maps/          # Moving AI Lab 地图文件（.map）
+│   └── benchmark_scens/         # 场景文件（.scen），按 dao/street/wc3 分类
+├── docs/                        # 论文文档
+│   ├── 投稿主稿_v1.docx         # ★ 最新主稿（Word，含嵌入图表）
+│   ├── 投稿主稿_v1.md           # ★ 最新主稿（Markdown）
+│   ├── 结论-证据对照表_v3.md    # 每条声明对应的精确数值证据
+│   ├── 科研透明看板.md           # 项目进度看板
+│   ├── 图文一致性审计_v1.md     # 图表与正文一致性检查
+│   ├── 主稿审查评估报告_v1_Manus.md
+│   └── 论文现状评估报告_Manus.md
+├── figures/                     # 论文最终图表（共 5 张）
+│   ├── fig1_runtime_comparison_v3.png    # 图1：运行时间对比
+│   ├── fig2_turncount_comparison_v3.png  # 图2：转弯次数对比
+│   ├── fig3_ablation_study_v3.png        # 图3：消融实验
+│   ├── path_comparison_6maps_v3.png      # 图4：路径可视化对比
+│   └── fig5_nodes_vs_obstacle_v3.png     # 图5：扩展节点数 vs 障碍率
+├── results/                     # 权威实验数据（v3 strict scen 口径）
+│   ├── exp_fix15_v3_all_summary.csv      # ★ 完整汇总（90行）
+│   ├── exp_fix15_v3_key_metrics.csv      # ★ 核心指标汇总
+│   ├── exp_fix15_v3_significance.csv     # 显著性检验结果
+│   ├── exp_fix15_v3_dao_raw_records.csv  # DAO 原始数据
+│   ├── exp_fix15_v3_street_raw_records.csv
+│   ├── exp_fix15_v3_wc3_raw_records.csv
+│   ├── adaptive_alpha_gridsearch_raw.csv # 自适应权重参数搜索原始数据
+│   ├── adaptive_alpha_gridsearch_summary.csv
+│   ├── adaptive_alpha_recommendation.csv
+│   ├── literature_core8.csv             # 核心文献数据
+│   └── literature_quick_screen.csv      # 文献筛选记录
+├── scripts/                     # 辅助脚本
+│   └── manus_auto_monitor.py
+├── 科研论文/文献/               # 参考文献 PDF（10 篇）
+├── .cursor/                     # AI 助手配置
+│   ├── rules/                   # Cursor 写作规则（academic-paper-cn.mdc）
+│   └── skills/                  # 写作 Skills（humanize、stop-slop 等）
+├── CLAUDE.md                    # 项目全局 AI 配置（Skills 索引 + 写作规范）
+└── README.md                    # 本文件
+```
 
-> `科研论文/code/` 已于 Round5 归档至 `results/obsolete_pre_v3/科研论文_code_archive/`，不再维护，不得引用。
+---
+
+## 核心实验结果（v3 权威数据）
+
+| 指标 | 标准 A* | 改进 A* | 提升幅度 |
+|---|---|---|---|
+| 运行时间 | 基准 | 0.8728x | **快 12.7%** |
+| 路径长度 | 基准 | 0.9510x | **缩短 4.9%** |
+| 转弯次数 | 1.131 次 | 0.027 次 | **减少 97.6%** |
+
+> 数据来源：`results/exp_fix15_v3_key_metrics.csv`（15 张地图 × 30 次重复 = 2700 条记录）
 
 ---
 
 ## 算法创新点
 
-本项目在标准 A* 基础上提出三项改进：
-
 1. **Octile 启发函数**：专为 8 邻域移动设计，比曼哈顿/欧氏距离更准确。
-2. **自适应权重 α**：根据地图障碍率自动调节搜索激进程度（`α = clip(|ln(ρ)|, 1.0, 1.8)`）。
-3. **两阶段路径平滑**：冗余点删除（Line-of-Sight）+ 拐角插值平滑，大幅减少转弯次数。
-
-> **注**：JPS-like 扩展策略已于 Round4/5 彻底移除，全仓库 grep 确认无任何残留。
+2. **自适应权重**：$\alpha = \text{clip}(|\ln(\rho)|, 1.0, 1.8)$，根据局部障碍率动态调整搜索偏向。
+3. **两阶段路径平滑**：先 Line-of-Sight 消除冗余折点，再 B 样条插值平滑曲率。
 
 ---
 
-## 从零复现 v3 实验结果（单命令）
+## 快速复现
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/liujiashu0202/-.git
-cd -
+# 克隆仓库
+git clone https://github.com/liujiashu0206/-.git && cd -
 
-# 2. 安装依赖（仅需 numpy）
-pip install numpy
+# 安装依赖
+pip install numpy matplotlib
 
-# 3. 运行实验（strict scen 口径，15 张地图 × 30 次）
+# 运行权威实验（v3 strict scen，15 张地图 × 30 次）
 python code/experiments/run_fix15_v3.py
 
-# 4. 查看关键指标
+# 查看核心指标
 cat results/exp_fix15_v3_key_metrics.csv
-
-# 5. 生成路径对比可视化图
-python code/visualize/plot_path_comparison.py
-# 输出：figures/path_comparison_6maps_v3_Manus.png
 ```
 
-> **注意**：所有脚本使用相对路径，必须在项目根目录（`-/`）下运行。
+> 所有脚本使用相对路径，请在项目根目录下运行。
 
 ---
 
-## 权威结果文件（v3，strict scen 口径）
-
-| 文件 | 说明 |
-|---|---|
-| `results/exp_fix15_v3_all_summary.csv` | 15 张地图 × 6 算法的完整汇总（90 行） |
-| `results/exp_fix15_v3_key_metrics.csv` | 改进 A* vs 传统 A* 的关键指标对比 |
-| `results/exp_fix15_v3_dao_raw_records.csv` | DAO 地图原始记录（900 行） |
-| `results/exp_fix15_v3_street_raw_records.csv` | Street 地图原始记录（900 行） |
-| `results/exp_fix15_v3_wc3_raw_records.csv` | WC3 地图原始记录（900 行） |
-| `docs/结论-证据对照表_v3.md` | 每条论文结论对应的 CSV 字段与图文件名（唯一权威引用路径） |
-
-> **已废弃（obsolete）**：`results/obsolete_pre_v3/` 目录下的所有文件均为旧版实验数据，不得用于论文引用。  
-> **注**：`科研论文/docs/结论-证据对照表_v3_Manus.md` 为历史路径，已同步至 `docs/结论-证据对照表_v3.md`，请统一引用主路径。
-
----
-
-## 核心实验结果（v3，strict scen，15 张地图均值）
-
-| 指标 | 传统 A* | 改进 A* | 变化 |
-|---|---|---|---|
-| 运行时间 | 基准 | **0.8728x** | 快约 13% |
-| 路径长度 | 基准 | **-0.30** | 缩短 |
-| 转弯次数 | 基准 | **-1.10 次** | 减少 |
-
----
-
-## 目录结构
-
-```
-.
-├── code/                     ← 唯一源代码目录
-│   ├── planners/
-│   │   ├── algorithms.py     # 核心算法（A*, 改进A*, 消融变体）
-│   │   └── core.py           # 基础工具（启发函数、路径平滑等）
-│   ├── experiments/
-│   │   └── run_fix15_v3.py   # 主实验脚本（strict scen 口径）
-│   └── visualize/
-│       └── plot_path_comparison.py  # 路径对比可视化（相对路径，跨平台）
-├── data/
-│   ├── benchmark_maps/       # Moving AI 真实地图（.map 格式）
-│   └── benchmark_scens/      # 固定测试任务（.scen 格式）
-├── docs/                     ← 项目级权威文档（唯一引用路径）
-│   └── 结论-证据对照表_v3.md # 每条论文结论 → CSV 字段 + 图文件名（可追溯）
-├── results/
-│   ├── exp_fix15_v3_*.csv    # 权威实验结果（v3，唯一口径）
-│   └── obsolete_pre_v3/      # 已废弃的旧版数据（含 科研论文/code 归档）
-├── figures/                  # 实验图表
-└── 科研论文/
-    └── docs/                 # 论文草稿与分析报告（科研论文/docs/结论-证据对照表_v3_Manus.md 已同步至 docs/）
-```
-
----
-
-## 环境要求
-
-- Python 3.8+
-- numpy（`pip install numpy`）
-- matplotlib（仅可视化需要，`pip install matplotlib`）
-
----
-
-*本项目由 Manus AI 辅助开发与审查，Cursor 协同编码，所有实验数据均基于 Moving AI Lab 公开基准测试集。*
+*最后更新：2026-03-20 | 维护：Manus AI + Cursor*
