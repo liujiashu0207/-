@@ -125,9 +125,9 @@ def improved_astar_search_configurable(
     start: Point,
     goal: Point,
     use_adaptive_weight: bool = True,
-    use_jump_like: bool = True,
+    use_jump_like: bool = False,
     use_smoothing: bool = True,
-    fixed_weight: float = 1.2,
+    fixed_weight: float = 1.0,
     precomputed_alpha: Optional[float] = None,
 ) -> Dict[str, object]:
     if use_adaptive_weight:
@@ -168,9 +168,9 @@ def improved_astar_search(
         start,
         goal,
         use_adaptive_weight=True,
-        use_jump_like=True,
+        use_jump_like=False,
         use_smoothing=True,
-        fixed_weight=1.2,
+        fixed_weight=1.0,
         precomputed_alpha=precomputed_alpha,
     )
 
@@ -181,13 +181,14 @@ def ablation_no_adaptive_weight(grid: np.ndarray, start: Point, goal: Point) -> 
         start,
         goal,
         use_adaptive_weight=False,
-        use_jump_like=True,
+        use_jump_like=False,
         use_smoothing=True,
-        fixed_weight=1.2,
+        fixed_weight=1.0,
     )
 
 
 def ablation_no_jump_like(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    # NOTE: With jump_like now disabled by default, this ablation is redundant.
     return improved_astar_search_configurable(
         grid,
         start,
@@ -195,7 +196,7 @@ def ablation_no_jump_like(grid: np.ndarray, start: Point, goal: Point) -> Dict[s
         use_adaptive_weight=True,
         use_jump_like=False,
         use_smoothing=True,
-        fixed_weight=1.2,
+        fixed_weight=1.0,
     )
 
 
@@ -205,7 +206,7 @@ def ablation_no_smoothing(grid: np.ndarray, start: Point, goal: Point) -> Dict[s
         start,
         goal,
         use_adaptive_weight=True,
-        use_jump_like=True,
+        use_jump_like=False,
         use_smoothing=False,
-        fixed_weight=1.2,
+        fixed_weight=1.0,
     )

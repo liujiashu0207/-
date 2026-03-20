@@ -184,6 +184,10 @@ def _is_reachable(grid: np.ndarray, start: Point, goal: Point) -> bool:
                 continue
             if grid[nx, ny] == 1 or nb in visited:
                 continue
+            # Same anti-tunneling rule as neighbors8.
+            if dx != 0 and dy != 0:
+                if grid[x + dx, y] == 1 or grid[x, y + dy] == 1:
+                    continue
             if nb == goal:
                 return True
             visited.add(nb)
