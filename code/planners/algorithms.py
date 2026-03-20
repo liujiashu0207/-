@@ -7,6 +7,7 @@ import numpy as np
 from .core import (
     Point,
     adaptive_alpha,
+    euclidean_distance,
     line_of_sight,
     neighbors8,
     obstacle_ratio,
@@ -22,6 +23,8 @@ from .core import (
 def _heuristic(a: Point, b: Point, mode: str) -> float:
     if mode == "zero":
         return 0.0
+    if mode == "euclidean":
+        return euclidean_distance(a, b)
     return octile_distance(a, b)
 
 
@@ -109,6 +112,12 @@ def dijkstra_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, ob
 
 
 def vanilla_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    """传统 A*：欧氏距离启发函数，α=1.0，无平滑。作为基线。"""
+    return astar_search(grid, start, goal, heuristic_mode="euclidean", weight=1.0, use_jump_like=False)
+
+
+def octile_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+    """Octile A*：Octile 距离启发函数，α=1.0，无平滑。展示启发函数精度提升。"""
     return astar_search(grid, start, goal, heuristic_mode="octile", weight=1.0, use_jump_like=False)
 
 
