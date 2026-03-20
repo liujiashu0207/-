@@ -23,7 +23,7 @@ if str(CODE_DIR) not in sys.path:
 
 from utils.map_loader import load_grid_map
 from planners.algorithms import vanilla_astar_search, improved_astar_search
-from planners.core import sample_start_goal
+from planners.core import line_of_sight
 
 plt.rcParams.update({
     "font.family": "SimHei",
@@ -38,12 +38,12 @@ plt.rcParams.update({
 FIGURES_DIR = ROOT / "figures"
 
 MAPS_TO_PLOT = [
-    ("DAO", "arena.map", "data/benchmark_maps/dao-map/arena.map"),
-    ("DAO", "arena2.map", "data/benchmark_maps/dao-map/arena2.map"),
-    ("WC3", "battleground.map", "data/benchmark_maps/wc3maps512-map/battleground.map"),
-    ("WC3", "darkforest.map", "data/benchmark_maps/wc3maps512-map/darkforest.map"),
-    ("DAO", "brc000d.map", "data/benchmark_maps/dao-map/brc000d.map"),
-    ("WC3", "bootybay.map", "data/benchmark_maps/wc3maps512-map/bootybay.map"),
+    ("DAO", "arena.map", "data/benchmark_maps/dao-map/arena.map", "data/benchmark_scens/dao/arena.map.scen"),
+    ("DAO", "arena2.map", "data/benchmark_maps/dao-map/arena2.map", "data/benchmark_scens/dao/arena2.map.scen"),
+    ("WC3", "battleground.map", "data/benchmark_maps/wc3-map/battleground.map", "data/benchmark_scens/wc3maps512/battleground.map.scen"),
+    ("WC3", "darkforest.map", "data/benchmark_maps/wc3-map/darkforest.map", "data/benchmark_scens/wc3maps512/darkforest.map.scen"),
+    ("DAO", "brc000d.map", "data/benchmark_maps/dao-map/brc000d.map", "data/benchmark_scens/dao/brc000d.map.scen"),
+    ("WC3", "bootybay.map", "data/benchmark_maps/wc3-map/bootybay.map", "data/benchmark_scens/wc3maps512/bootybay.map.scen"),
 ]
 
 CMAP_GRID = ListedColormap(["#f0f0f0", "#2c3e50"])
@@ -71,17 +71,52 @@ def plot_path_on_ax(ax, grid, path_astar, path_improved, title):
     ax.legend(fontsize=6, loc="lower right", framealpha=0.8)
 
 
+def parse_scen_tasks(path: Path):
+    tasks = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("version"):
+            continue
+        parts = line.split()
+        if len(parts) < 9:
+            continue
+        sc, sr, gc, gr = int(parts[4]), int(parts[5]), int(parts[6]), int(parts[7])
+        start = (sr, sc)
+        goal = (gr, gc)
+        if start != goal:
+            tasks.append((start, goal))
+    return tasks
+
+
+def path_is_collision_free(grid, path):
+    if not path:
+        return False
+    h, w = grid.shape
+    for p in path:
+        x, y = p
+        if not (0 <= x < h and 0 <= y < w):
+            return False
+        if grid[x, y] == 1:
+            return False
+    for i in range(1, len(path)):
+        a = path[i - 1]
+        b = path[i]
+        if not line_of_sight(grid, a, b):
+            return False
+    return True
+
+
 def main():
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    rng = np.random.default_rng(42)
 
     valid_maps = []
-    for map_type, name, rel_path in MAPS_TO_PLOT:
+    for map_type, name, rel_path, scen_rel in MAPS_TO_PLOT:
         full_path = ROOT / rel_path
-        if full_path.exists():
-            valid_maps.append((map_type, name, full_path))
+        scen_path = ROOT / scen_rel
+        if full_path.exists() and scen_path.exists():
+            valid_maps.append((map_type, name, full_path, scen_path))
         else:
-            print(f"[SKIP] Map not found: {full_path}")
+            print(f"[SKIP] Missing map/scen: {full_path} | {scen_path}")
 
     if len(valid_maps) < 2:
         print("[ERROR] Need at least 2 maps, aborting.")
@@ -95,27 +130,27 @@ def main():
         axes = axes.reshape(1, -1)
 
     for idx in range(n):
-        map_type, name, full_path = valid_maps[idx]
+        map_type, name, full_path, scen_path = valid_maps[idx]
         grid = load_grid_map(full_path)
-
         h, w = grid.shape
-        display_grid = grid
-        if h > 128 or w > 128:
-            scale = max(h, w) // 128
-            if scale > 1:
-                display_grid = grid[::scale, ::scale]
 
-        sg = sample_start_goal(grid, rng)
-        if sg is None:
-            print(f"[WARN] Cannot find start/goal for {name}")
+        path_a, path_i, res_astar, res_improved = [], [], None, None
+        for start, goal in parse_scen_tasks(scen_path):
+            if grid[start] == 1 or grid[goal] == 1:
+                continue
+            res_astar = vanilla_astar_search(grid, start, goal)
+            res_improved = improved_astar_search(grid, start, goal)
+            if not (res_astar["success"] and res_improved["success"]):
+                continue
+            pa = res_astar["path"]
+            pi = res_improved["path"]
+            if path_is_collision_free(grid, pa) and path_is_collision_free(grid, pi):
+                path_a, path_i = pa, pi
+                break
+
+        if not path_a or not path_i:
+            print(f"[WARN] Cannot find collision-free pair from scen for {name}")
             continue
-        start, goal = sg
-
-        res_astar = vanilla_astar_search(grid, start, goal)
-        res_improved = improved_astar_search(grid, start, goal)
-
-        path_a = res_astar["path"] if res_astar["success"] else []
-        path_i = res_improved["path"] if res_improved["success"] else []
 
         row, col = divmod(idx, ncols)
         ax = axes[row][col]
@@ -137,7 +172,7 @@ def main():
 
     fig.suptitle("图 4  路径对比可视化（传统 A* vs 改进 A*）", fontsize=13, y=1.01)
     fig.tight_layout()
-    out = FIGURES_DIR / "path_comparison_6maps_v3.png"
+    out = FIGURES_DIR / "path_comparison_6maps_v4_no_tunneling.png"
     fig.savefig(out)
     plt.close(fig)
     print(f"[OK] {out}")

@@ -7,6 +7,7 @@ import numpy as np
 from .core import (
     Point,
     adaptive_alpha,
+    line_of_sight,
     neighbors8,
     obstacle_ratio,
     octile_distance,
@@ -39,6 +40,9 @@ def _jump_like_neighbors(grid: np.ndarray, node: Point, max_jump: int = 3):
             if not (0 <= nx < h and 0 <= ny < w):
                 break
             if grid[nx, ny] == 1:
+                break
+            # Ensure every jumped segment stays collision-free.
+            if not line_of_sight(grid, node, (nx, ny)):
                 break
             move_cost = step * (2**0.5 if dx != 0 and dy != 0 else 1.0)
             yield (nx, ny), move_cost
@@ -142,7 +146,7 @@ def improved_astar_search_configurable(
 
     p0 = res["path"]
     p1 = simplify_path(p0, grid)
-    p2 = smooth_corners(p1)
+    p2 = smooth_corners(p1, grid)
     res["path"] = p2
     res["path_length"] = path_length(p2)
     res["turn_count"] = turn_count(p2)

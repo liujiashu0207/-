@@ -1,4 +1,4 @@
-﻿import math
+import math
 from collections import deque
 from typing import Iterable, List, Optional, Tuple
 
@@ -26,9 +26,16 @@ def neighbors8(grid: np.ndarray, node: Point) -> Iterable[Tuple[Point, float]]:
         (1, -1),  (1, 0),  (1, 1),
     ):
         nx, ny = x + dx, y + dy
-        if 0 <= nx < h and 0 <= ny < w and grid[nx, ny] == 0:
-            step = math.sqrt(2.0) if dx != 0 and dy != 0 else 1.0
-            yield (nx, ny), step
+        if not (0 <= nx < h and 0 <= ny < w):
+            continue
+        if grid[nx, ny] == 1:
+            continue
+        # Disallow diagonal corner-cutting to avoid "tunneling" through obstacles.
+        if dx != 0 and dy != 0:
+            if grid[x + dx, y] == 1 or grid[x, y + dy] == 1:
+                continue
+        step = math.sqrt(2.0) if dx != 0 and dy != 0 else 1.0
+        yield (nx, ny), step
 
 
 def obstacle_ratio(grid: np.ndarray) -> float:
@@ -123,6 +130,10 @@ def smooth_corners(path: List[Point], grid: np.ndarray) -> List[Point]:
 
         # Collision check: if smoothed point hits obstacle, keep original corner.
         if not (0 <= mx < grid.shape[0] and 0 <= my < grid.shape[1]) or grid[mx, my] == 1:
+            smoothed.append((bx, by))
+        elif not line_of_sight(grid, (ax, ay), (mx, my)):
+            smoothed.append((bx, by))
+        elif not line_of_sight(grid, (mx, my), (cx, cy)):
             smoothed.append((bx, by))
         else:
             smoothed.append((mx, my))
