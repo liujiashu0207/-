@@ -1,6 +1,0 @@
-map_name,size,ratio,attempt_id,accepted,reason,scenario_file,scenario_bucket,scenario_optlen
-arena.map,49,0.1445231153685964,0,1,valid_scenario_sample,arena.map.scen,0,3.0
-arena.map,49,0.1445231153685964,1,1,valid_scenario_sample,arena.map.scen,0,2.41421356
-arena.map,49,0.1445231153685964,2,1,valid_scenario_sample,arena.map.scen,0,2.0
-arena.map,49,0.1445231153685964,3,1,valid_scenario_sample,arena.map.scen,0,1.41421356
-arena.map,49,0.1445231153685964,4,1,valid_scenario_sample,arena.map.scen,0,3.82842712
