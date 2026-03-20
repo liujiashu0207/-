@@ -128,8 +128,12 @@ def improved_astar_search_configurable(
     use_jump_like: bool = True,
     use_smoothing: bool = True,
     fixed_weight: float = 1.2,
+    precomputed_alpha: Optional[float] = None,
 ) -> Dict[str, object]:
-    alpha = adaptive_alpha(obstacle_ratio(grid)) if use_adaptive_weight else fixed_weight
+    if use_adaptive_weight:
+        alpha = precomputed_alpha if precomputed_alpha is not None else adaptive_alpha(obstacle_ratio(grid))
+    else:
+        alpha = fixed_weight
     res = astar_search(
         grid,
         start,
@@ -153,7 +157,12 @@ def improved_astar_search_configurable(
     return res
 
 
-def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[str, object]:
+def improved_astar_search(
+    grid: np.ndarray,
+    start: Point,
+    goal: Point,
+    precomputed_alpha: Optional[float] = None,
+) -> Dict[str, object]:
     return improved_astar_search_configurable(
         grid,
         start,
@@ -162,6 +171,7 @@ def improved_astar_search(grid: np.ndarray, start: Point, goal: Point) -> Dict[s
         use_jump_like=True,
         use_smoothing=True,
         fixed_weight=1.2,
+        precomputed_alpha=precomputed_alpha,
     )
 
 
